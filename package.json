@@ -1,0 +1,14 @@
+{
+  "name": "fanout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crowdsourced AI API — one endpoint, everyone's keys.",
+  "scripts": {
+    "secrets": "node scripts/gen-secrets.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5"
+  }
+}
