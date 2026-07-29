@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fanout — Crowdsourced AI API</title>
+<meta name="description" content="One endpoint. Everyone's keys. A stateless multi-provider AI proxy running on the edge." />
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #14171c; --line: #232830; --ink: #e8eaed;
+    --dim: #8b929e; --accent: #ff7a45; --ok: #5ad1a0; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+  h1 { font-size: 40px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .tag { color: var(--dim); font-size: 17px; margin: 0 0 40px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 40px 0 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 5px; }
+  input, select, textarea {
+    width: 100%; padding: 10px 12px; background: #0a0c0f; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 7px; font-family: var(--mono); font-size: 13px;
+  }
+  textarea { resize: vertical; min-height: 70px; font-family: inherit; }
+  button {
+    margin-top: 14px; padding: 10px 18px; background: var(--accent); color: #17110d;
+    border: 0; border-radius: 7px; font-weight: 650; font-size: 14px; cursor: pointer;
+  }
+  button:disabled { opacity: 0.45; cursor: default; }
+  pre {
+    margin: 14px 0 0; padding: 13px; background: #0a0c0f; border: 1px solid var(--line);
+    border-radius: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--ok);
+    white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto;
+  }
+  pre:empty { display: none; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 180px; }
+  .pool { font-size: 12px; color: var(--dim); margin-top: 10px; font-family: var(--mono); }
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fan<span>out</span></h1>
+  <p class="tag">One endpoint. Everyone's keys. Bring your own credentials, pool them, and call any
+  provider through a single OpenAI-shaped API — with no database anywhere in the stack.</p>
+
+  <h2>1 · Get a Fanout key</h2>
+  <div class="card">
+    <label for="handle">Handle (cosmetic — every key gets its own isolated id)</label>
+    <input id="handle" placeholder="enes" />
+    <button id="btn-key">Issue key</button>
+    <pre id="out-key"></pre>
+  </div>
+
+  <h2>2 · Connect a provider</h2>
+  <div class="card">
+    <p style="margin:0;color:var(--dim);font-size:13px">
+      Your provider key is encrypted and handed straight back to you. Fanout stores nothing —
+      the blob lives in your browser, and it only decrypts for the Fanout key that made it.
+    </p>
+    <div class="row">
+      <div>
+        <label for="provider">Provider</label>
+        <select id="provider">
+          <option value="anthropic">anthropic</option>
+          <option value="openai">openai</option>
+          <option value="groq">groq</option>
+        </select>
+      </div>
+      <div>
+        <label for="label">Label</label>
+        <input id="label" placeholder="my personal key" />
+      </div>
+    </div>
+    <label for="provider-key">Provider API key</label>
+    <input id="provider-key" type="password" placeholder="sk-ant-..." />
+    <button id="btn-connect">Seal connection</button>
+    <div class="pool" id="pool"></div>
+    <pre id="out-connect"></pre>
+  </div>
+
+  <h2>3 · Call it</h2>
+  <div class="card">
+    <label for="model">Model</label>
+    <input id="model" value="anthropic/claude-opus-5" />
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt">Explain what a crowdsourced API proxy is, in two sentences.</textarea>
+    <button id="btn-run">Send</button>
+    <pre id="out-run"></pre>
+  </div>
+
+  <h2>Drop it into your app</h2>
+  <div class="card">
+    <p style="margin:0 0 14px;color:var(--dim);font-size:13px">
+      <strong style="color:var(--ink)">Nothing to install.</strong> Fanout speaks OpenAI's wire
+      format, so the SDK you already use works — point <code>baseURL</code> at Fanout and go.
+      Switching providers is editing one string.
+    </p>
+<pre style="color:var(--ink)">import OpenAI from 'openai'
+
+const fanout = new OpenAI({
+  baseURL: '$ORIGIN/api/v1',
+  apiKey: process.env.FANOUT_KEY,
+  defaultHeaders: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
+})
+
+await fanout.chat.completions.create({
+  model: 'anthropic/claude-opus-5',   // -> openai/gpt-4o -> groq/llama-3.3-70b-versatile
+  messages: [{ role: 'user', content: 'hi' }],
+})</pre>
+    <p style="margin:14px 0 0;color:var(--dim);font-size:13px">
+      Same in Python, the Vercel AI SDK, or raw HTTP — it's two headers and a JSON body:
+    </p>
+<pre style="color:var(--ink)">curl $ORIGIN/api/v1/chat/completions \
+  -H "Authorization: Bearer $FANOUT_KEY" \
+  -H "X-Fanout-Connection: $CONN_A,$CONN_B" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"anthropic/claude-opus-5",
+       "messages":[{"role":"user","content":"hi"}]}'</pre>
+    <p style="margin:14px 0 0;color:var(--dim);font-size:13px">
+      Comma-separate connections to pool them. Fanout picks one at random and fails over to the
+      next when a provider returns 401, 429, or 5xx — so a pool of donated keys behaves like one
+      key with everyone's combined quota. Response headers tell you which one served you.
+    </p>
+  </div>
+
+  <footer>
+    Stateless by construction: keys are HMAC signatures, connections are AES-GCM blobs you hold.
+    A demo, not a production service — read the <a href="https://github.com/EnesYilmazcode/fanout">source</a>
+    before you trust it with a real credential.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const show = (el, v) => { el.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2) }
+const origin = location.origin
+
+let fanoutKey = localStorage.getItem('fanout_key') || ''
+let connections = JSON.parse(localStorage.getItem('fanout_conns') || '[]')
+
+if (fanoutKey) show($('out-key'), fanoutKey)
+renderPool()
+
+document.querySelectorAll('pre').forEach((p) => {
+  if (p.textContent.includes('$ORIGIN')) p.textContent = p.textContent.replaceAll('$ORIGIN', origin)
+})
+
+function renderPool() {
+  $('pool').textContent = connections.length
+    ? `pool: ${connections.map((c) => `${c.provider}:${c.label || 'unnamed'}`).join('  ·  ')}`
+    : ''
+  localStorage.setItem('fanout_conns', JSON.stringify(connections))
+}
+
+async function post(path, body, key) {
+  const res = await fetch(origin + path, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+  return { res, json: await res.json().catch(() => ({})) }
+}
+
+$('btn-key').onclick = async () => {
+  const btn = $('btn-key'); btn.disabled = true
+  try {
+    const { json } = await post('/api/keys/issue', { handle: $('handle').value })
+    if (json.key) {
+      fanoutKey = json.key
+      localStorage.setItem('fanout_key', fanoutKey)
+    }
+    show($('out-key'), json)
+  } catch (e) { show($('out-key'), String(e)) }
+  btn.disabled = false
+}
+
+$('btn-connect').onclick = async () => {
+  if (!fanoutKey) return show($('out-connect'), 'Issue a Fanout key first.')
+  const btn = $('btn-connect'); btn.disabled = true
+  try {
+    const { json } = await post('/api/connect', {
+      provider: $('provider').value,
+      apiKey: $('provider-key').value,
+      label: $('label').value,
+    }, fanoutKey)
+    if (json.connection) {
+      connections.push({ blob: json.connection, provider: json.provider, label: json.label })
+      $('provider-key').value = ''
+      renderPool()
+    }
+    show($('out-connect'), json)
+  } catch (e) { show($('out-connect'), String(e)) }
+  btn.disabled = false
+}
+
+$('btn-run').onclick = async () => {
+  if (!fanoutKey) return show($('out-run'), 'Issue a Fanout key first.')
+  if (!connections.length) return show($('out-run'), 'Seal at least one connection first.')
+  const btn = $('btn-run'); btn.disabled = true
+  show($('out-run'), 'streaming…')
+  try {
+    const res = await fetch(origin + '/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${fanoutKey}`,
+        'x-fanout-connection': connections.map((c) => c.blob).join(','),
+      },
+      body: JSON.stringify({
+        model: $('model').value,
+        stream: true,
+        messages: [{ role: 'user', content: $('prompt').value }],
+      }),
+    })
+
+    if (!res.ok || !res.body) return show($('out-run'), await res.text())
+
+    const served = res.headers.get('x-fanout-connection-label')
+    let text = served ? `[served by ${res.headers.get('x-fanout-provider')} · ${served}]\n\n` : ''
+    show($('out-run'), text)
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let i
+      while ((i = buf.indexOf('\n\n')) !== -1) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2)
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (payload === '[DONE]') continue
+        try {
+          const delta = JSON.parse(payload).choices?.[0]?.delta?.content
+          if (delta) { text += delta; show($('out-run'), text) }
+        } catch {}
+      }
+    }
+  } catch (e) { show($('out-run'), String(e)) }
+  btn.disabled = false
+}
+</script>
+</body>
+</html>
