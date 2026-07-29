@@ -28,6 +28,8 @@ stale relative to the code. Newest entries at the top of each log.
 | 11 | Committed test suite — `npm test` | `test` |
 | 12 | Deployed to production, GitHub auto-deploy connected | — |
 | 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
+| 14 | Adversarial security review of the live deployment | — |
+| 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
 
 ### Next
 
@@ -92,6 +94,31 @@ Otherwise the first connection in the header absorbs all traffic and the rest ar
 
 ---
 
+## Security review — 2026-07-28
+
+An adversarial pass was run against the live deployment: 14 key-forgery variants, 9 blob-isolation
+attacks, secret-leakage scans with a planted sentinel key, SSRF probes, and amplification testing.
+
+**The cryptographic model held.** Every forgery attempt was rejected — payload swapping with a kept
+signature, tier escalation `free → pro`, key-version bumps, expiry tampering, single-byte flips in
+payload and signature. Every blob-isolation attack was rejected — cross-user replay, byte flips in
+the IV, ciphertext and GCM tag, truncation, IV swapping, cross-provider confusion. The planted
+provider key never appeared in any response body or header, including on error paths. Endpoints are
+hardcoded per adapter, so the model string offers no SSRF surface.
+
+**Two real abuse paths were found, both fixed and re-verified live.**
+
+| Severity | Issue | Fix |
+|---|---|---|
+| HIGH | Uncapped fan-out. Failover walks the pool serially and nothing bounded its length; ~140 blobs fit under Vercel's 32KB header limit, turning one request into ~140 upstream calls and ~20s of function time. | `MAX_POOL = 8`, rejected with 400 above it. Verified: 100 blobs now returns 400 in ~1s with zero upstream calls. |
+| MEDIUM | Rate limits keyed only on user id, while minting a key is unauthenticated and free — so hitting a limit was answered by taking a fresh key and a fresh bucket. | Limits now also apply per source IP, on both minting and the proxy. Verified: minting cuts off after ~10 per source. |
+| LOW | The connection label is echoed into a response header and accepted CRLF. Only reachable on the upstream-success path, so never confirmed live. | Stripped to printable ASCII at seal time. |
+
+Worth stating plainly: the IP dimension does **not** stop a distributed caller, and is not meant to.
+It closes the trivial single-source bypass. Real enforcement needs shared state — see Icebox.
+
+---
+
 ## Known limits
 
 Honest list. None of these are bugs; all are consequences of choices above.
@@ -110,6 +137,11 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-07-28
 
+- **Security review** of the live deployment. Crypto model survived every attack; two abuse paths
+  found and fixed (pool cap, per-IP metering) plus one latent header-injection vector closed.
+  Regression tests added for all three. Full detail in the Security review section above.
+- **Failover confirmed working live** — an 8-connection pool returns `X-Fanout-Attempts: 8`,
+  proving the proxy actually walks the pool rather than giving up on the first failure.
 - **Deployed to production** at https://fanout-tawny.vercel.app, with the GitHub repo connected
   so pushes deploy themselves. Secrets are set for all three environments.
 - **Fixed a production-only 404** on `/api/v1/chat/completions` caused by catch-all route depth.
