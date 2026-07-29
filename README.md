@@ -51,7 +51,7 @@ connection served the request.
 Models are provider-prefixed: `anthropic/claude-opus-5`, `openai/gpt-4o`, `groq/llama-3.3-70b-versatile`.
 
 ```bash
-curl https://YOUR-APP.vercel.app/api/v1/chat/completions \
+curl https://fanout-tawny.vercel.app/api/v1/chat/completions \
   -H "Authorization: Bearer $FANOUT_KEY" \
   -H "X-Fanout-Connection: $CONN_A,$CONN_B" \
   -H "Content-Type: application/json" \
@@ -73,7 +73,7 @@ as a default header. After that, switching providers is editing one string.
 import OpenAI from 'openai'
 
 const fanout = new OpenAI({
-  baseURL: 'https://YOUR-APP.vercel.app/api/v1',
+  baseURL: 'https://fanout-tawny.vercel.app/api/v1',
   apiKey: process.env.FANOUT_KEY,
   defaultHeaders: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
 })
@@ -90,7 +90,7 @@ const res = await fanout.chat.completions.create({
 from openai import OpenAI
 
 fanout = OpenAI(
-    base_url="https://YOUR-APP.vercel.app/api/v1",
+    base_url="https://fanout-tawny.vercel.app/api/v1",
     api_key=os.environ["FANOUT_KEY"],
     default_headers={"X-Fanout-Connection": os.environ["FANOUT_CONNECTIONS"]},
 )
@@ -108,7 +108,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
 const fanout = createOpenAICompatible({
   name: 'fanout',
-  baseURL: 'https://YOUR-APP.vercel.app/api/v1',
+  baseURL: 'https://fanout-tawny.vercel.app/api/v1',
   apiKey: process.env.FANOUT_KEY,
   headers: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
 })

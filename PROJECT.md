@@ -3,8 +3,8 @@
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
 
-**Status:** built and unit-verified, not yet deployed
-**Live URL:** _not deployed yet_
+**Status:** deployed and verified live
+**Live URL:** https://fanout-tawny.vercel.app
 **Last updated:** 2026-07-28
 
 ---
@@ -26,13 +26,14 @@ stale relative to the code. Newest entries at the top of each log.
 | 9 | Landing page with live 3-step demo | `feat(web)` |
 | 10 | README, integration snippets, this board | `docs` |
 | 11 | Committed test suite — `npm test` | `test` |
+| 12 | Deployed to production, GitHub auto-deploy connected | — |
+| 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
 
 ### Next
 
 | Priority | Item | Why |
 |---|---|---|
-| P0 | Deploy to Vercel, fill in the live URL above | Nothing is real until it's reachable |
-| P0 | End-to-end test against a real provider key | The suite covers translation; nothing has hit a live provider yet |
+| P0 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet |
 | P1 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
 | P1 | `X-Fanout-Pool-Health` response header | Surface which connections failed, not just which one won |
 | P2 | Retry budget per request | One bad pool of 20 blobs currently costs 20 upstream calls |
@@ -71,8 +72,16 @@ provider SDKs would blow the Edge size limit and buy nothing over `fetch`. Zero 
 shrinks the supply-chain surface, which matters because `MASTER_ENCRYPTION_KEY` decrypts every
 outstanding connection.
 
-**2026-07-28 · One catch-all route for `/api/v1/*`.**
-Hobby caps function count and each file is its own bundle.
+**2026-07-28 · Explicit route files, not a catch-all. _(reversed an earlier decision)_**
+The original design used one `api/v1/[...path].ts` to conserve function count. It 404'd in
+production for any path deeper than one segment — `/api/v1/models` resolved, but
+`/api/v1/chat/completions` did not, which is the entire product. Vercel's zero-config `api/`
+directory matches a single segment for `[...param]`.
+
+The build was green and the function was listed correctly in `vercel inspect`; only an actual
+HTTP request against the deployment revealed it. Worth remembering: a successful build says
+nothing about whether a route resolves. Shared logic now lives in `lib/gateway.ts` with thin
+route files, at five functions total.
 
 **2026-07-28 · Connection blobs are bound to the owner as AES-GCM additional data.**
 Without this, a blob scraped from someone else's browser would spend their credits. With it,
@@ -101,6 +110,13 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-07-28
 
+- **Deployed to production** at https://fanout-tawny.vercel.app, with the GitHub repo connected
+  so pushes deploy themselves. Secrets are set for all three environments.
+- **Fixed a production-only 404** on `/api/v1/chat/completions` caused by catch-all route depth.
+  Found by smoke-testing the live deploy, not by the build.
+- Verified live: key issuing, connection sealing, auth enforcement, rate-limit headers, model
+  validation, and — the important one — a blob issued to one user is rejected (403) when a
+  different user presents it. The full chain reaches Anthropic and returns a real `request_id`.
 - Test suite committed to `test/smoke.mts`; `npm run check` runs typecheck plus 22 assertions.
   Previously these existed only as throwaway scratch, which meant no one could re-run them.
 - Initial build: auth, sealing, three provider adapters, pooling proxy, landing page.
