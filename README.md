@@ -1,42 +1,67 @@
 # Fanout
 
-**Crowdsourced AI API.** One OpenAI-shaped endpoint that routes to Anthropic, OpenAI, or Groq
-using credentials the callers bring themselves — pooled across many keys, with automatic failover.
+One OpenAI-shaped endpoint that routes to Anthropic, OpenAI, or Groq using API keys the caller
+brings. Hand it several keys at once and it treats them as a pool, picking one at random and
+falling over to the next when one is rate limited or dead.
 
-Runs entirely on Vercel's free tier. There is no database anywhere in the stack.
+Runs on Vercel's free tier. No database, no runtime dependencies.
 
----
+Live at https://fanout-tawny.vercel.app
 
-## How it works with no datastore
+## Quickstart
 
-Two ideas do all the work.
+```bash
+BASE=https://fanout-tawny.vercel.app
 
-**API keys are signatures, not rows.** A Fanout key is a payload plus an HMAC of that payload:
+# 1. Mint a Fanout key. No signup, no account.
+curl -sX POST $BASE/api/keys/issue -d '{"handle":"you"}'
+
+# 2. Seal a provider key into a connection blob.
+curl -sX POST $BASE/api/connect \
+  -H "Authorization: Bearer $FANOUT_KEY" -H "Content-Type: application/json" \
+  -d '{"provider":"anthropic","apiKey":"sk-ant-...","label":"personal"}'
+
+# 3. Call it. Comma-separate blobs to pool them.
+curl $BASE/api/v1/chat/completions \
+  -H "Authorization: Bearer $FANOUT_KEY" \
+  -H "X-Fanout-Connection: $CONN_A,$CONN_B" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"anthropic/claude-opus-5","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Store the Fanout key when you get it. Nothing on the server remembers it, so it cannot be shown
+again.
+
+## How it works with no database
+
+Two ideas carry the whole thing.
+
+**The key is the record.** A Fanout key is a payload plus an HMAC of that payload:
 
 ```
 fo_live_<base64url({u,t,v,i,e})>.<base64url(hmac_sha256(payload))>
 ```
 
-Verifying it is one HMAC recompute — no lookup, no latency, no table. The payload carries the
-user id and tier, which is everything the proxy needs to route and meter.
+Checking one is a single HMAC recompute. No lookup, no table, no round trip. The payload carries
+the user id and tier, which is everything the proxy needs to route and meter. Keys expire after
+90 days.
 
-**Connections are sealed blobs the client holds.** `POST /api/connect` takes a provider key,
-encrypts it with AES-256-GCM under the server's master key, binds the ciphertext to the caller's
-user id as additional authenticated data, and hands it back:
+**Connections are sealed blobs the caller holds.** `POST /api/connect` takes a provider key,
+encrypts it with AES-256-GCM under the server's master key, mixes the caller's user id in as
+additional authenticated data, and hands the result back:
 
 ```
 fc_<base64url(iv)>.<base64url(ciphertext||tag)>
 ```
 
-Fanout keeps no copy. The AAD binding means a blob stolen from someone else fails to decrypt
-rather than spending their credits.
+Fanout keeps no copy. The AAD binding means a blob lifted off someone else fails to decrypt
+instead of spending their credits.
 
-**The fanout part.** Send several connection blobs in one header and the proxy treats them as a
-pool: it picks one at random and retries the next on 401, 429, or 5xx. A group of donated keys
-behaves like a single key with everyone's combined quota. Response headers report which
-connection served the request.
-
----
+**The fanout part.** Several blobs in one header become a pool. The proxy starts at a random
+offset so the first blob in the list doesn't absorb everything, then walks to the next one on a
+401, 403, 429, or 5xx. Response headers report which connection served the request and how many
+attempts it took. Eight blobs per request is the cap, because failover is serial and an uncapped
+pool turns one call into a hundred upstream calls.
 
 ## Endpoints
 
@@ -44,30 +69,20 @@ connection served the request.
 |---|---|---|
 | `POST` | `/api/keys/issue` | Mint a Fanout key |
 | `POST` | `/api/connect` | Seal a provider credential into a connection blob |
-| `POST` | `/api/v1/chat/completions` | The proxy (OpenAI-compatible, streaming supported) |
+| `POST` | `/api/v1/chat/completions` | The proxy, OpenAI-compatible, streaming supported |
 | `GET` | `/api/v1/models` | List available providers |
-| `GET` | `/api/health` | Liveness + config presence |
+| `GET` | `/api/health` | Liveness and whether the secrets are configured |
 
-Models are provider-prefixed: `anthropic/claude-opus-5`, `openai/gpt-4o`, `groq/llama-3.3-70b-versatile`.
+Models are provider-prefixed: `anthropic/claude-opus-5`, `openai/gpt-4o`,
+`groq/llama-3.3-70b-versatile`.
 
-```bash
-curl https://fanout-tawny.vercel.app/api/v1/chat/completions \
-  -H "Authorization: Bearer $FANOUT_KEY" \
-  -H "X-Fanout-Connection: $CONN_A,$CONN_B" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"anthropic/claude-opus-5","messages":[{"role":"user","content":"hi"}]}'
-```
+## Using it from code
 
----
+There is no Fanout package to install. The API is OpenAI-shaped on purpose, so every client
+library that already speaks that format works unchanged. Point `baseURL` at Fanout, pass the
+`fo_live_` key as the API key, send the connection blob as a default header.
 
-## Dropping it into an app
-
-**There is no Fanout package to install.** The API is OpenAI-shaped on purpose, so every client
-library that already speaks that format works unchanged. Integration is three lines of config:
-point `baseURL` at Fanout, pass your `fo_live_` key as the API key, and send the connection blob
-as a default header. After that, switching providers is editing one string.
-
-**JavaScript / TypeScript** — the official `openai` package:
+**JavaScript and TypeScript**, with the official `openai` package:
 
 ```js
 import OpenAI from 'openai'
@@ -84,7 +99,7 @@ const res = await fanout.chat.completions.create({
 })
 ```
 
-**Python** — same idea:
+**Python**, same idea:
 
 ```python
 from openai import OpenAI
@@ -101,7 +116,7 @@ res = fanout.chat.completions.create(
 )
 ```
 
-**Vercel AI SDK** — via `@ai-sdk/openai-compatible`:
+**Vercel AI SDK**, through `@ai-sdk/openai-compatible`:
 
 ```ts
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
@@ -116,15 +131,12 @@ const fanout = createOpenAICompatible({
 const { text } = await generateText({ model: fanout('anthropic/claude-opus-5'), prompt: 'hi' })
 ```
 
-**Anything else** — it's plain HTTP. Two headers and a JSON body, as in the curl above.
+**Anything else** is plain HTTP. Two headers and a JSON body, like the curl above.
 
-The model string is the only thing that changes when you switch destinations:
-`anthropic/claude-opus-5` → `openai/gpt-4o` → `groq/llama-3.3-70b-versatile`. Same code, same
-endpoint, different provider — that is the remote-control part. If a Fanout key is configured
-server-side and the model string comes from a config value or a UI dropdown, users retarget the
-model without touching code at all.
-
----
+Switching destinations is one string. `anthropic/claude-opus-5` becomes `openai/gpt-4o` becomes
+`groq/llama-3.3-70b-versatile`, with the same code against the same endpoint. If the Fanout key
+lives server-side and the model string comes from a config value or a dropdown, users retarget
+the model without touching code at all.
 
 ## Deploy
 
@@ -134,29 +146,32 @@ npm run secrets          # prints MASTER_SECRET and MASTER_ENCRYPTION_KEY
 ```
 
 Import the repo at [vercel.com/new](https://vercel.com/new), add both secrets as environment
-variables (mark them Sensitive), and deploy. Everything runs on the Edge runtime, so there are
-no cold starts and streaming responses pipe straight through rather than buffering in a lambda.
+variables and mark them Sensitive, then deploy. Everything runs on the Edge runtime, so there are
+no cold starts and streaming responses pipe straight through instead of buffering in a lambda.
 
-For local work: put the same two variables in `.env.local` and run `vercel dev`.
+For local work, put the same two variables in `.env.local` and run `vercel dev`. `npm run check`
+runs the typecheck and the smoke tests.
 
----
+## Notes and limits
 
-## Design notes and limits
-
-- **Edge runtime throughout.** Providers are called with plain `fetch`, not their SDKs — bundling
-  three SDKs would blow the Edge size limit for no benefit.
-- **Streaming is piped, not buffered.** Anthropic's SSE events are translated to OpenAI chunks
-  frame by frame, which also sidesteps the function timeout since bytes keep flowing.
-- **Rate limiting is per-instance.** The counter lives in module scope on a warm edge instance, so
-  it is approximate by design. It protects Fanout's own invocation quota, not the caller's provider
-  spend — they pay for that themselves. Swap in Upstash keyed on user id if you need it exact.
-- **No revocation.** A signed key is valid until it expires (90 days). Adding revocation means
-  adding state — Vercel Edge Config is the cheapest place to put a denylist.
-- **The master key is the whole trust model.** `MASTER_ENCRYPTION_KEY` decrypts every outstanding
-  connection blob. Keep the dependency tree minimal, never log request bodies or headers, and use
-  distinct secrets per environment.
+- **Providers are called with plain `fetch`, not their SDKs.** Bundling three SDKs would blow the
+  Edge size limit and buy nothing.
+- **Streaming is translated frame by frame.** Anthropic's SSE events become OpenAI chunks as they
+  arrive, so nothing buffers and the function timeout never comes into play.
+- **Rate limiting is approximate.** The counter lives in module scope on a warm edge instance, so
+  it resets on a cold start and multiplies across regions. Free keys get 20 requests a minute, pro
+  gets 120, with a 60 per minute ceiling on the source IP over the top of that. It protects
+  Fanout's own invocation quota, not the caller's provider spend, which they pay for themselves.
+  Swap in Upstash keyed on user id if you need it exact.
+- **No revocation.** A signed key works until it expires. Revoking means storing state, and Vercel
+  Edge Config is the cheapest place to put a denylist.
+- **The master key is the entire trust model.** `MASTER_ENCRYPTION_KEY` decrypts every outstanding
+  connection blob. That is why the dependency tree is empty and why nothing logs request bodies or
+  headers. Use different secrets per environment.
 - **Rotating a secret invalidates everything signed or sealed under it.** Key rotation is a version
-  bump in `lib/auth.ts`; connection rotation would need a `kid` prefix on the blob.
+  bump in `lib/auth.ts`. Rotating connections would need a `kid` prefix on the blob.
+- **Vercel's Hobby plan prohibits commercial use.** A real deployment needs Pro or a different host.
 
-This is a demo built to show the architecture, not a service to trust with a valuable credential.
-Vercel's Hobby plan also prohibits commercial use — a real deployment needs Pro or a different host.
+This is a demo of the architecture, not a service to trust with a valuable credential.
+
+Design decisions, the security review, and what is still open live in [PROJECT.md](PROJECT.md).

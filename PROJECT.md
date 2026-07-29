@@ -169,6 +169,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ## Changelog
 
+### 2026-07-29
+
+- **README rewritten** in a plainer voice, with a Quickstart at the top so the first thing a
+  reader sees is three curls that get them a working call. The old one explained the crypto
+  before it explained how to get a key. Also documented things the README had never mentioned:
+  the `MAX_POOL = 8` cap, the per-IP rate limits from the security review, the actual per-minute
+  numbers, the random start offset, and 403 as a failover trigger (it listed only 401/429/5xx).
+
 ### 2026-07-28
 
 - **Security review** of the live deployment. Crypto model survived every attack; two abuse paths
