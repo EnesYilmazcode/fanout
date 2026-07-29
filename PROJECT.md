@@ -3,7 +3,7 @@
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
 
-**Status:** deployed and verified live
+**Status:** deployed and verified live — but see the open question on the sharing model
 **Live URL:** https://fanout-tawny.vercel.app
 **Last updated:** 2026-07-28
 
@@ -31,12 +31,46 @@ stale relative to the code. Newest entries at the top of each log.
 | 14 | Adversarial security review of the live deployment | — |
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
 
+### ⚠️ Open: the sharing model is wrong for the intended product
+
+**Parked 2026-07-28, needs a decision before further building.**
+
+What exists is a *personal* key router: you pool **your own** keys and fail over between them.
+
+What Fanout is meant to be is a *two-sided marketplace*: people with spare AI capacity deposit
+keys, people who want cheap access consume them. Sellers and buyers are different people.
+
+These are opposite designs, and the current one structurally blocks the intended one. Connection
+blobs are bound to their owner as AES-GCM additional data, so a buyer **cannot** use a seller's
+key — decryption fails by design. That property was deliberately built and then hardened in the
+security review; it is exactly the property a marketplace must not have.
+
+Rebuilding as a marketplace requires:
+
+| Piece | Note |
+|---|---|
+| Shared server-side key pool | Sellers' keys must be usable by strangers — the owner binding comes out |
+| Buyer → arbitrary seller routing | Does not exist |
+| Per-seller usage accounting | Needed to pay anyone; does not exist |
+| **A datastore** | Unavoidable. The no-database property (see Decision log) cannot survive this |
+
+Upstash Redis on Vercel's free tier is the intended landing spot.
+
+**Also unresolved — a premise problem worth settling before the pitch.** The seller story is
+"monetize your idle coding subscription", but Claude Max, Cursor, and Copilot subscriptions do not
+issue API keys: they authenticate over OAuth, are seat-licensed to one person, and reselling access
+violates their terms. What can actually be deposited is a console API key, which is pay-per-token —
+so there is no idle headroom to sell, only resale at cost. The demo works either way; the pitch does
+not survive contact with someone who knows this. Decide whether to reframe.
+
 ### Next
 
 | Priority | Item | Why |
 |---|---|---|
-| P0 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet |
-| P1 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
+| P0 | **Decide: personal router or marketplace** | Everything below depends on it; see above |
+| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet |
+| P1 | Publish an npm package for the seller side | Depositing a key is awkward as raw curl. Buyers need nothing — the OpenAI SDK already works |
+| P2 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
 | P1 | `X-Fanout-Pool-Health` response header | Surface which connections failed, not just which one won |
 | P2 | Retry budget per request | One bad pool of 20 blobs currently costs 20 upstream calls |
 | P2 | Token usage in streaming responses | Anthropic sends `message_delta.usage`; currently dropped |
