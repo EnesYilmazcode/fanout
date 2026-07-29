@@ -50,18 +50,23 @@ export default async function handler(req: Request): Promise<Response> {
     return json(400, { error: { message: 'Field "apiKey" is required.' } })
   }
 
+  // The label is echoed back in the x-fanout-connection-label response header,
+  // so control characters here would be a header-injection vector. Strip to
+  // printable ASCII at the point of sealing rather than trusting the read path.
+  const label = (payload.label ?? '').replace(/[^\x20-\x7E]/g, '').slice(0, 40)
+
   const blob = await seal({
     provider,
     apiKey,
     owner: auth.u,
     createdAt: Date.now(),
-    label: (payload.label ?? '').slice(0, 40) || undefined,
+    label: label || undefined,
   })
 
   return json(200, {
     connection: blob,
     provider,
-    label: payload.label ?? null,
+    label: label || null,
     usage: 'Send this in the X-Fanout-Connection header. Comma-separate several to pool them.',
     note: 'Bound to your key. Another user replaying this blob gets a decryption failure, not your credits.',
   })

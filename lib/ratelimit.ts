@@ -35,3 +35,23 @@ export function check(userId: string, limit: number): Verdict {
 }
 
 export const LIMITS: Record<string, number> = { free: 20, pro: 120 }
+
+/**
+ * Best-effort client IP, for limits that must survive key rotation.
+ *
+ * Metering on user id alone is bypassable here: /api/keys/issue is unauthenticated
+ * and free, so anyone can mint a fresh key — and therefore a fresh bucket — as often
+ * as they like. An IP dimension makes rotation pointless for a single source. It is
+ * not a real defence against a distributed caller, and it is not meant to be; it
+ * closes the trivial bypass, nothing more.
+ */
+export function clientIp(req: Request): string {
+  const fwd = req.headers.get('x-forwarded-for')
+  if (fwd) return fwd.split(',')[0].trim()
+  return req.headers.get('x-real-ip') ?? 'unknown'
+}
+
+/** Key minting is cheap for us but should not be free to automate. */
+export const IP_ISSUE_LIMIT = 10
+/** Ceiling per source IP across all keys it holds. */
+export const IP_PROXY_LIMIT = 60

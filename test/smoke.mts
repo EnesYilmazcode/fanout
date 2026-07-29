@@ -88,5 +88,26 @@ for (let i = 0; i < 20; i++) check('user_a', 20)
 t('requests under the limit pass', check('user_b', 3).ok)
 t('requests over the limit are blocked', !check('user_a', 20).ok)
 
+console.log('\nabuse limits — regressions from the security review')
+const { MAX_POOL } = await import('../lib/gateway.ts')
+const { clientIp, IP_ISSUE_LIMIT, IP_PROXY_LIMIT } = await import('../lib/ratelimit.ts')
+
+// Failover walks the pool serially, so pool size multiplies both upstream calls
+// and function time. Uncapped this reached ~140 upstream requests per client call.
+t('pool size is capped', typeof MAX_POOL === 'number' && MAX_POOL > 0 && MAX_POOL <= 16, `MAX_POOL=${MAX_POOL}`)
+t('an IP ceiling exists for key minting', IP_ISSUE_LIMIT > 0 && IP_ISSUE_LIMIT <= 20)
+t('an IP ceiling exists for the proxy', IP_PROXY_LIMIT > 0)
+
+const ipReq = (h: Record<string, string>) => new Request('https://x/', { headers: h })
+t('clientIp reads x-forwarded-for', clientIp(ipReq({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' })) === '1.2.3.4')
+t('clientIp falls back to x-real-ip', clientIp(ipReq({ 'x-real-ip': '9.9.9.9' })) === '9.9.9.9')
+t('clientIp degrades safely', clientIp(ipReq({})) === 'unknown')
+
+// The label is echoed into a response header, so control characters would be a
+// header-injection vector.
+const dirty = 'ok\r\nX-Injected: yes'
+const cleaned = dirty.replace(/[^\x20-\x7E]/g, '').slice(0, 40)
+t('control characters strip out of a label', !/[\r\n]/.test(cleaned), JSON.stringify(cleaned))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

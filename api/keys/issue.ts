@@ -1,6 +1,7 @@
 // Mint a Fanout API key. This is a signature, not a database write — see lib/auth.ts.
 
 import { issueKey } from '../../lib/auth'
+import { check, clientIp, IP_ISSUE_LIMIT } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -17,6 +18,16 @@ export default async function handler(req: Request): Promise<Response> {
       status: 405,
       headers: { 'content-type': 'application/json', ...CORS },
     })
+  }
+
+  // Minting is unauthenticated by design, which makes it the softest spot in the
+  // whole service: a fresh key is a fresh rate-limit bucket, so unlimited minting
+  // would make every downstream limit decorative. Cap per source.
+  if (!check(`issue:${clientIp(req)}`, IP_ISSUE_LIMIT).ok) {
+    return new Response(
+      JSON.stringify({ error: { message: 'Too many keys requested from this source. Try again shortly.', type: 'rate_limit_error' } }),
+      { status: 429, headers: { 'content-type': 'application/json', ...CORS } },
+    )
   }
 
   let handle = ''

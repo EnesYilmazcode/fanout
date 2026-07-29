@@ -8,7 +8,7 @@
 import { verifyKey, bearer } from './auth'
 import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
-import { check, LIMITS, type Verdict } from './ratelimit'
+import { check, LIMITS, clientIp, IP_PROXY_LIMIT, type Verdict } from './ratelimit'
 
 export const CORS = {
   'access-control-allow-origin': '*',
@@ -42,6 +42,13 @@ async function gate(req: Request) {
   const rl = check(auth.u, LIMITS[auth.t] ?? LIMITS.free)
   const headers = rlHeaders(rl)
   if (!rl.ok) return { fail: err(429, 'Rate limit exceeded.', 'rate_limit_error', headers) }
+
+  // Second dimension, on the source IP. Without it the per-user limit above is
+  // decorative: minting a new key is free and unauthenticated, so a caller can
+  // rotate into a fresh bucket whenever they hit one.
+  const ip = check(`ip:${clientIp(req)}`, IP_PROXY_LIMIT)
+  if (!ip.ok) return { fail: err(429, 'Rate limit exceeded for this source.', 'rate_limit_error', headers) }
+
   return { auth, headers }
 }
 
@@ -49,6 +56,13 @@ async function gate(req: Request) {
 function shouldFailover(status: number) {
   return status === 401 || status === 403 || status === 429 || status >= 500
 }
+
+// Failover walks the pool serially, so pool size is a direct multiplier on both
+// outbound requests and function time. Uncapped, a caller could send ~140 blobs
+// in one header (bounded only incidentally by Vercel's 32KB header limit) and
+// turn a single request into 140 upstream calls and ~20s of execution.
+// Eight is well past any legitimate pool and bounds the blast radius.
+export const MAX_POOL = 8
 
 export async function listModels(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return preflight()
@@ -92,6 +106,9 @@ export async function chatCompletions(req: Request): Promise<Response> {
   const raw = (req.headers.get('x-fanout-connection') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   if (raw.length === 0) {
     return err(400, 'Missing X-Fanout-Connection header. Create one at POST /api/connect.', 'invalid_request_error', headers)
+  }
+  if (raw.length > MAX_POOL) {
+    return err(400, `Too many connections: ${raw.length}. At most ${MAX_POOL} may be pooled in one request.`, 'invalid_request_error', headers)
   }
 
   const conns: Connection[] = []
