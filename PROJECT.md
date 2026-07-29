@@ -25,13 +25,14 @@ stale relative to the code. Newest entries at the top of each log.
 | 8 | Proxy with connection pooling and failover | `feat(api)` |
 | 9 | Landing page with live 3-step demo | `feat(web)` |
 | 10 | README, integration snippets, this board | `docs` |
+| 11 | Committed test suite — `npm test` | `test` |
 
 ### Next
 
 | Priority | Item | Why |
 |---|---|---|
 | P0 | Deploy to Vercel, fill in the live URL above | Nothing is real until it's reachable |
-| P0 | End-to-end test against a real provider key | Unit tests cover translation; nothing has hit Anthropic yet |
+| P0 | End-to-end test against a real provider key | The suite covers translation; nothing has hit a live provider yet |
 | P1 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
 | P1 | `X-Fanout-Pool-Health` response header | Surface which connections failed, not just which one won |
 | P2 | Retry budget per request | One bad pool of 20 blobs currently costs 20 upstream calls |
@@ -100,6 +101,8 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-07-28
 
+- Test suite committed to `test/smoke.mts`; `npm run check` runs typecheck plus 22 assertions.
+  Previously these existed only as throwaway scratch, which meant no one could re-run them.
 - Initial build: auth, sealing, three provider adapters, pooling proxy, landing page.
 - Verified with 22 runtime checks — cross-user blob rejection, tamper rejection, and SSE
   reassembly across a split chunk boundary all pass. `tsc --noEmit` clean.
