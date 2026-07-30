@@ -280,7 +280,10 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
     }
 
     if (body.stream && upstream.body) {
-      return new Response(adapter.translateStream(upstream.body, body.model), {
+      // OpenAI convention: emit a trailing usage chunk only when the caller
+      // opted in via stream_options.include_usage.
+      const includeUsage = (body.stream_options as { include_usage?: unknown } | undefined)?.include_usage === true
+      return new Response(adapter.translateStream(upstream.body, body.model, includeUsage), {
         headers: {
           'content-type': 'text/event-stream; charset=utf-8',
           'cache-control': 'no-cache',

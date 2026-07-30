@@ -20,7 +20,11 @@ export type Adapter = {
   headers(apiKey: string): Record<string, string>
   translateRequest(body: ChatRequest, model: string): unknown
   translateResponse(json: any, model: string): unknown
-  translateStream(upstream: ReadableStream<Uint8Array>, model: string): ReadableStream<Uint8Array>
+  translateStream(
+    upstream: ReadableStream<Uint8Array>,
+    model: string,
+    includeUsage?: boolean,
+  ): ReadableStream<Uint8Array>
 }
 
 const encoder = new TextEncoder()
@@ -120,10 +124,15 @@ const anthropic: Adapter = {
     }
   },
 
-  translateStream(upstream, model) {
+  translateStream(upstream, model, includeUsage) {
     return new ReadableStream({
       async start(controller) {
         let id = 'chatcmpl-fanout'
+        // Anthropic reports token counts across the stream: input_tokens arrives
+        // in message_start, output_tokens accumulates in each message_delta.
+        // We track them so a caller that opted in can get a final usage chunk.
+        let promptTokens = 0
+        let completionTokens = 0
         try {
           controller.enqueue(sse(chunk(model, id, { role: 'assistant', content: '' }, null)))
           for await (const f of frames(upstream)) {
@@ -133,17 +142,40 @@ const anthropic: Adapter = {
             } catch {
               continue
             }
-            if (ev.type === 'message_start' && ev.message?.id) id = ev.message.id
-            else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            if (ev.type === 'message_start' && ev.message?.id) {
+              id = ev.message.id
+              if (typeof ev.message.usage?.input_tokens === 'number') promptTokens = ev.message.usage.input_tokens
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
               controller.enqueue(sse(chunk(model, id, { content: ev.delta.text }, null)))
-            } else if (ev.type === 'message_delta' && ev.delta?.stop_reason) {
-              const finish = ev.delta.stop_reason === 'max_tokens' ? 'length' : 'stop'
-              controller.enqueue(sse(chunk(model, id, {}, finish)))
+            } else if (ev.type === 'message_delta') {
+              if (typeof ev.usage?.output_tokens === 'number') completionTokens = ev.usage.output_tokens
+              if (ev.delta?.stop_reason) {
+                const finish = ev.delta.stop_reason === 'max_tokens' ? 'length' : 'stop'
+                controller.enqueue(sse(chunk(model, id, {}, finish)))
+              }
             }
           }
         } catch {
           // Upstream cut out mid-stream. Close cleanly so the client sees a
           // truncated answer rather than a hung socket.
+        }
+        // OpenAI emits a final usage-only chunk (empty choices) when the caller
+        // set stream_options.include_usage. Match that shape, and only when opted in.
+        if (includeUsage) {
+          controller.enqueue(
+            sse({
+              id,
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model,
+              choices: [],
+              usage: {
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: promptTokens + completionTokens,
+              },
+            }),
+          )
         }
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
