@@ -32,10 +32,10 @@ curl $BASE/api/v1/chat/completions \
 Store the Fanout key when you get it. Nothing on the server remembers it, so it cannot be shown
 again.
 
-Prefer a browser? The [setup page](https://fanout-tawny.vercel.app/setup.html) does all three
-steps and hands you one copyable config block (env vars, curl, Python, or JS), kept only in
-your browser's localStorage — with a download-a-backup button, because that cache is the only
-copy of your key anywhere.
+Prefer a browser? The [home page](https://fanout-tawny.vercel.app) mints your key the moment it
+loads and hands you one copyable config block (env vars, curl, Python, or JS), kept only in
+your browser's localStorage — with a backup link, because that cache is the only copy of your
+key anywhere. An interactive demo lives at [/demo.html](https://fanout-tawny.vercel.app/demo.html).
 
 ## How it works with no database
 

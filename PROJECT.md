@@ -32,6 +32,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
 | 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
 | 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
+| 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -179,6 +180,16 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (later)
+
+- **Homepage redesigned to founder's spec**: light mode, minimal, key-first. The page now IS
+  the product surface — a key auto-mints on first visit, with Copy and Regenerate, a compact
+  provider row (kept because a Fanout key routes nothing without at least one sealed provider
+  key), the copyable config block doubling as the API docs, and backup/restore as footer
+  links. Regenerate warns and clears sealed providers, since blobs only decrypt under the key
+  that made them. The old dark landing/demo moved to `/demo.html`. Same strict CSP; verified
+  in-browser under it, 13 checks.
 
 ### 2026-07-30
 
