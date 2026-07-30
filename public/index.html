@@ -33,9 +33,13 @@
   </section>
 
   <section id="view-support" hidden>
-    <p class="lead">Paste this into Claude Code:</p>
+    <p class="lead">Paste this into Claude Code or Codex:</p>
     <pre id="worker"></pre>
     <button id="btn-copy-worker">Copy</button>
+    <div class="status" id="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">Waiting for your node to connect…</span>
+    </div>
     <p class="hint">While it runs, your machine answers other people's requests — you'll see
     their prompts, they'll get your answers.</p>
   </section>

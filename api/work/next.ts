@@ -6,7 +6,7 @@
 // that is inherent to the relay and is disclosed where the worker is set up.
 
 import { verifyKey, bearer } from '../../lib/auth'
-import { nextJob } from '../../lib/queue'
+import { nextJob, markLive } from '../../lib/queue'
 import { check, clientIp } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
@@ -41,6 +41,11 @@ export default async function handler(req: Request): Promise<Response> {
       status: 429, headers: { 'content-type': 'application/json', ...CORS },
     })
   }
+
+  // Mark presence up front — a node polling for work is a live node whether or
+  // not this particular poll returns a job. This is what /api/work/status reads
+  // so the site can light up "connected" the moment the worker loop starts.
+  await markLive(auth.u)
 
   const job = await nextJob(POLL_WINDOW_MS)
   if (!job) return new Response(null, { status: 204, headers: CORS })

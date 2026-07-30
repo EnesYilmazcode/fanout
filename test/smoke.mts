@@ -194,5 +194,26 @@ await cycle2
 const sseText = await streamRes.text()
 t('stream:true yields SSE with the answer', sseText.includes('echo:ping-sse') && sseText.trimEnd().endsWith('data: [DONE]'))
 
+console.log('\nsupporter presence — the site can tell when a node is live')
+const workStatus = (await import('../api/work/status.ts')).default
+const statusReq = (key: string) => new Request('https://x/api/work/status', { headers: { authorization: `Bearer ${key}` } })
+const presenceUser = await issueKey('presence_user', 'free')
+
+const before = await (await workStatus(statusReq(presenceUser))).json()
+t('a node that never polled reads offline', before.connected === false)
+
+// A poll marks the node live before it even returns work. Give it a job to pop
+// so the long-poll returns immediately instead of holding the full window.
+const { submitJob } = await import('../lib/queue.ts')
+await submitJob('claude-code', [{ role: 'user', content: 'warm' }])
+await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${presenceUser}` } }))
+const after = await (await workStatus(statusReq(presenceUser))).json()
+t('polling marks the node connected', after.connected === true)
+
+// Presence is scoped to the key — a different user never sees this node.
+const other = await (await workStatus(statusReq(await issueKey('someone_else', 'free')))).json()
+t('presence does not leak across keys', other.connected === false)
+t('status needs a key', (await workStatus(new Request('https://x/api/work/status'))).status === 401)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

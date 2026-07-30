@@ -87,6 +87,36 @@ function workerBrief() {
 Note: jobs are strangers' prompts in plaintext, and they receive your answers verbatim.`
 }
 
+// --- presence: light up when the supporter's node starts polling ----------
+
+let statusTimer = null
+
+function setStatus(connected) {
+  const box = $('status')
+  box.classList.toggle('live', connected)
+  $('status-text').textContent = connected
+    ? 'Connected — your machine is answering requests.'
+    : 'Waiting for your node to connect…'
+}
+
+async function pollStatus() {
+  if (!fanoutKey) return
+  try {
+    const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${fanoutKey}` } })
+    if (res.ok) setStatus((await res.json()).connected === true)
+  } catch { /* transient — the next tick retries */ }
+}
+
+function startWatching() {
+  setStatus(false)
+  pollStatus()
+  statusTimer = setInterval(pollStatus, 3000)
+}
+
+function stopWatching() {
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
+}
+
 // --- mode switch ----------------------------------------------------------
 
 $('mode-switch').addEventListener('click', () => {
@@ -94,6 +124,8 @@ $('mode-switch').addEventListener('click', () => {
   $('view-use').hidden = supporting
   $('view-support').hidden = !supporting
   $('mode-switch').textContent = supporting ? 'Get a key' : 'Become a supporter'
+  if (supporting) startWatching()
+  else stopWatching()
 })
 
 // --- init -----------------------------------------------------------------

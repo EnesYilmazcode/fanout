@@ -17,11 +17,18 @@ const RESULT_TTL_S = 120
 const QUEUE_KEY = 'fanout:jobs'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// A supporter node counts as "connected" for this long after its last poll.
+// Comfortably longer than one poll window so a node between long-polls doesn't
+// flicker offline.
+const PRESENCE_TTL_S = 45
+
 interface Store {
   push(job: Job): Promise<void>
   pop(): Promise<Job | null>
   setResult(id: string, text: string): Promise<void>
   getResult(id: string): Promise<string | null>
+  markPresence(userId: string): Promise<void>
+  isPresent(userId: string): Promise<boolean>
 }
 
 function upstashStore(url: string, token: string): Store {
@@ -42,12 +49,15 @@ function upstashStore(url: string, token: string): Store {
     },
     setResult: async (id, text) => { await cmd(['SET', `fanout:result:${id}`, text, 'EX', RESULT_TTL_S]) },
     getResult: async (id) => ((await cmd(['GET', `fanout:result:${id}`])) as string | null) ?? null,
+    markPresence: async (userId) => { await cmd(['SET', `fanout:live:${userId}`, '1', 'EX', PRESENCE_TTL_S]) },
+    isPresent: async (userId) => ((await cmd(['EXISTS', `fanout:live:${userId}`])) as number) === 1,
   }
 }
 
 function memoryStore(): Store {
   const jobs: Job[] = []
   const results = new Map<string, { text: string; at: number }>()
+  const presence = new Map<string, number>()
   return {
     push: async (job) => { jobs.push(job) },
     pop: async () => {
@@ -62,6 +72,13 @@ function memoryStore(): Store {
       if (!r) return null
       if (Date.now() - r.at > RESULT_TTL_S * 1000) { results.delete(id); return null }
       return r.text
+    },
+    markPresence: async (userId) => { presence.set(userId, Date.now()) },
+    isPresent: async (userId) => {
+      const at = presence.get(userId)
+      if (at === undefined) return false
+      if (Date.now() - at > PRESENCE_TTL_S * 1000) { presence.delete(userId); return false }
+      return true
     },
   }
 }
@@ -87,6 +104,16 @@ export async function nextJob(maxWaitMs: number): Promise<Job | null> {
     if (Date.now() >= deadline) return null
     await sleep(1000)
   }
+}
+
+/** Record that a supporter node is alive right now, keyed by its Fanout user id. */
+export async function markLive(userId: string): Promise<void> {
+  await store.markPresence(userId)
+}
+
+/** Is a supporter node currently polling under this user id? */
+export async function isLive(userId: string): Promise<boolean> {
+  return store.isPresent(userId)
 }
 
 /**

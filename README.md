@@ -83,6 +83,10 @@ dropped on a queue; a supporter's machine — running the worker loop from the h
 delivers it with `POST /api/work/complete`. The waiting user request picks the answer up and
 returns it OpenAI-shaped. No connection blob is required for `claude-code` calls.
 
+Every poll also marks the node "live" for ~45s, keyed by the Fanout user id, so the home page's
+supporter view lights up "connected" as soon as the pasted worker loop starts — that's what
+`GET /api/work/status` reads, and it only ever reports the caller's own node.
+
 The job id is an unguessable UUID and doubles as the capability to complete it; jobs carry only
 the model and flattened messages, never the requester's id or IP. Two honest limits: supporters
 see prompts (and users see answers) in plaintext — the relay is a trust relationship, stated at
@@ -99,6 +103,7 @@ of the box but a user and supporter on different edge instances only meet once U
 | `POST` | `/api/v1/chat/completions` | The proxy, OpenAI-compatible, streaming supported |
 | `POST` | `/api/work/next` | Supporter: long-poll for the next queued job |
 | `POST` | `/api/work/complete` | Supporter: deliver an answer for a job |
+| `GET` | `/api/work/status` | Is a supporter node live for this key? (drives the site's "connected" light) |
 | `GET` | `/api/v1/models` | List available providers |
 | `GET` | `/api/health` | Liveness and whether the secrets are configured |
 

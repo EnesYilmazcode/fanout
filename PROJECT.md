@@ -34,6 +34,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
 | 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
 | 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
+| 20 | Supporter presence — node heartbeat + `/api/work/status`, live "connected" light | `feat(relay)` |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -181,6 +182,16 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (supporter presence)
+
+- **Live connection detection.** Each `/api/work/next` poll now heartbeats the node (keyed by
+  Fanout user id, ~45s TTL); new `GET /api/work/status` reports whether the caller's own node is
+  live. The supporter view polls it every 3s and flips from "Waiting for your node to connect…"
+  to a green "Connected — your machine is answering requests" the moment the pasted worker loop
+  starts. Polling stops when the view is left. Presence is per-key — no cross-user visibility.
+  Four new smoke assertions (39 total) plus browser coverage of the offline→online transition.
+- Supporter brief reworded to "Paste this into Claude Code or Codex."
 
 ### 2026-07-30 (relay + centered homepage)
 
