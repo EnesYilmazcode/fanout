@@ -507,5 +507,13 @@ t('hasSecrets treats an empty string as unset', (() => {
   return r === false
 })())
 
+console.log('\nsupporter onboarding — hosted agent instructions at /llms.txt')
+const llms = readFileSync(new URL('../public/llms.txt', import.meta.url), 'utf8')
+t('llms.txt exists and is non-trivial', llms.length > 400, `len=${llms.length}`)
+t('llms.txt tells the agent to mint a key', /\/api\/keys\/issue/.test(llms))
+t('llms.txt describes the poll/answer/complete loop', /\/api\/work\/next/.test(llms) && /\/api\/work\/complete/.test(llms))
+t('llms.txt discloses the plaintext trust relationship', /plaintext/i.test(llms))
+t('the homepage points agents at /llms.txt', readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').includes('/llms.txt'))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

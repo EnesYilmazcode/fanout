@@ -22,6 +22,10 @@
 <!-- Favicon is a same-origin file, not a data: URI: the strict CSP sets
      img-src 'self' (no data:), so an inline data: icon would be blocked. -->
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<!-- Machine-readable supporter instructions for AI coding agents. Telling
+     Claude Code "connect to this site as a supporter" makes it fetch /llms.txt
+     and run the worker loop from there. -->
+<link rel="alternate" type="text/plain" title="Supporter instructions" href="/llms.txt" />
 <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
@@ -49,9 +53,14 @@
   </section>
 
   <section id="view-support" hidden>
-    <p class="lead">Paste this into Claude Code or Codex:</p>
-    <pre id="worker"></pre>
-    <button id="btn-copy-worker" aria-label="Copy the supporter brief" aria-live="polite">Copy</button>
+    <p class="lead">Tell Claude Code or Codex:</p>
+    <div class="keyrow">
+      <code id="connect-line">&nbsp;</code>
+      <button id="btn-copy-connect" class="icon" title="Copy" aria-label="Copy the connect instruction" aria-live="polite">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </div>
+    <p class="hint">Claude reads the steps from the site and starts answering jobs. Nothing to copy but this line.</p>
     <div class="status" id="status">
       <span class="dot" id="status-dot"></span>
       <span id="status-text">Waiting for your node to connect…</span>
@@ -59,6 +68,11 @@
     <p class="hint" id="support-online">&nbsp;</p>
     <p class="hint">While it runs, your machine answers other people's requests — you'll see
     their prompts, they'll get your answers.</p>
+    <details class="manual">
+      <summary>Or paste the steps yourself</summary>
+      <pre id="worker"></pre>
+      <button id="btn-copy-worker" aria-label="Copy the supporter brief">Copy the manual brief</button>
+    </details>
   </section>
 
   <footer>

@@ -66,6 +66,15 @@ button.icon:disabled { opacity: 0.4; cursor: default; }
 }
 #btn-copy-worker:hover { opacity: 0.85; }
 
+/* Fallback manual steps, tucked behind a disclosure so the one-liner stays the
+   star of the supporter view. */
+.manual { margin-top: 22px; text-align: left; }
+.manual > summary {
+  cursor: pointer; font-size: 13px; color: var(--dim); text-align: center; list-style-position: inside;
+}
+.manual > summary:hover { color: var(--ink); }
+.manual[open] > summary { margin-bottom: 4px; }
+
 .status {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 20px;
   font-size: 13.5px; color: var(--dim);
