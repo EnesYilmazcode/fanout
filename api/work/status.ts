@@ -7,7 +7,7 @@
 
 import { verifyKey, bearer } from '../../lib/auth'
 import { isLive, countLive } from '../../lib/queue'
-import { check, clientIp } from '../../lib/ratelimit'
+import { check, clientIp, type Verdict } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -15,15 +15,26 @@ const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, content-type',
   'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-expose-headers': 'x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
 }
 
 // The page polls every few seconds; keep a generous ceiling so a background tab
 // that fell behind isn't locked out, but still bounded.
 const IP_STATUS_LIMIT = 60
 
-function json(status: number, obj: unknown) {
+// Rate-limit headers from a limiter Verdict, matching how lib/gateway.ts builds
+// them so a cross-origin worker sees the same envelope on every Fanout endpoint.
+function rlHeaders(rl: Verdict) {
+  return {
+    'x-ratelimit-limit': String(rl.limit),
+    'x-ratelimit-remaining': String(rl.remaining),
+    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
+  }
+}
+
+function json(status: number, obj: unknown, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(obj), {
-    status, headers: { 'content-type': 'application/json', ...CORS },
+    status, headers: { 'content-type': 'application/json', ...CORS, ...extra },
   })
 }
 
@@ -33,10 +44,12 @@ export default async function handler(req: Request): Promise<Response> {
 
   const auth = await verifyKey(bearer(req))
   if (!auth) return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
-  if (!check(`status:${clientIp(req)}`, IP_STATUS_LIMIT).ok) {
-    return json(429, { error: { message: 'Polling status too fast.', type: 'rate_limit_error' } })
+  const rl = check(`status:${clientIp(req)}`, IP_STATUS_LIMIT)
+  const rlh = rlHeaders(rl)
+  if (!rl.ok) {
+    return json(429, { error: { message: 'Polling status too fast.', type: 'rate_limit_error' } }, rlh)
   }
 
   const [connected, online] = await Promise.all([isLive(auth.u), countLive()])
-  return json(200, { connected, online })
+  return json(200, { connected, online }, rlh)
 }
