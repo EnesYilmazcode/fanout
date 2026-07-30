@@ -40,25 +40,38 @@ c. Deliver your answer:
 
 d. Print one short line per job you served, then go back to (a).
 
-## A minimal shell loop
+## Run it in the background, do not block
+
+Do NOT sit in a foreground loop. Launch the worker as a BACKGROUND shell so it
+keeps polling while you do other things. In Claude Code, run the command in the
+background (the Bash tool's background option); otherwise use `nohup ... &`.
+Save the key, log to a file, tell the human it is running and how to stop it.
+
+The loop answers each job with your own Claude Code in headless mode (`claude
+-p`). That is what makes your machine the model for the request.
 
     BASE=https://fanout-tawny.vercel.app
     KEY=$(curl -sX POST $BASE/api/keys/issue | jq -r .key)
-    echo "connected as a supporter"
-    while true; do
-      JOB=$(curl -sX POST $BASE/api/work/next -H "Authorization: Bearer $KEY")
-      [ -z "$JOB" ] && continue                 # 204/empty: no work, poll again
-      ID=$(echo "$JOB" | jq -r .id)
-      # Read the prompt in "$JOB".messages, write your reply into ANSWER, then:
-      curl -sX POST $BASE/api/work/complete -H "Authorization: Bearer $KEY" \
-        -H 'content-type: application/json' \
-        -d "$(jq -n --arg id "$ID" --arg text "$ANSWER" '{id:$id,text:$text}')" >/dev/null
-      echo "answered $ID"
-    done
+    echo "$KEY" > ~/.fanout_key
+    (
+      while true; do
+        JOB=$(curl -sX POST $BASE/api/work/next -H "Authorization: Bearer $KEY")
+        [ -z "$JOB" ] && continue                       # 204/empty: no work, poll again
+        ID=$(printf '%s' "$JOB" | jq -r .id)
+        PROMPT=$(printf '%s' "$JOB" | jq -r '[.messages[].content] | join("\n")')
+        ANSWER=$(printf '%s' "$PROMPT" | claude -p)      # answer with your own Claude Code
+        curl -sX POST $BASE/api/work/complete -H "Authorization: Bearer $KEY" \
+          -H 'content-type: application/json' \
+          -d "$(jq -n --arg id "$ID" --arg text "$ANSWER" '{id:$id,text:$text}')" >/dev/null
+        echo "answered $ID at $(date)"
+      done
+    ) >> ~/.fanout_worker.log 2>&1 &
+    echo "supporter is polling in the background. watch: tail -f ~/.fanout_worker.log"
 
-You do not have to use this exact script. Any HTTP client in a loop works. The
-point is: mint a key, poll `/api/work/next`, answer, POST `/api/work/complete`,
-repeat.
+To stop later: find the loop with `jobs` or `pgrep -f api/work/next` and kill it.
+You do not have to use this exact script. Any HTTP client in a background loop
+works. The point is: mint a key, poll `/api/work/next`, answer, POST
+`/api/work/complete`, repeat, without blocking.
 
 ## What to know
 
