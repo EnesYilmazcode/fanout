@@ -12,6 +12,19 @@ const CORS = {
 }
 
 export default async function handler(req: Request): Promise<Response> {
+  try {
+    return await handleIssue(req)
+  } catch {
+    // Last line of defence: anything unforeseen becomes a clean JSON envelope
+    // with CORS, never a bare platform error page.
+    return new Response(
+      JSON.stringify({ error: { message: 'Internal error issuing a key.', type: 'api_error' } }),
+      { status: 500, headers: { 'content-type': 'application/json', ...CORS } },
+    )
+  }
+}
+
+async function handleIssue(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: { message: 'Use POST.' } }), {

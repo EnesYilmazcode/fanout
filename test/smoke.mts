@@ -299,6 +299,27 @@ t('health reports the queue backend', healthBody.queue === 'memory', healthBody.
 t('health reports supporters_online as a number', typeof healthBody.supporters_online === 'number')
 t('health supporters_online matches countLive', healthBody.supporters_online === (await countLive()))
 
+console.log('\nerror handling — key and connect endpoints never leak a bare platform 500')
+const issueHandler = (await import('../api/keys/issue.ts')).default
+const connectHandler = (await import('../api/connect.ts')).default
+
+// A request object that throws the moment the handler touches it forces the
+// unforeseen-error path. The wrapper must still answer with a clean JSON
+// envelope and the CORS headers, mirroring lib/gateway.ts chatCompletions.
+const boom = () => new Proxy({}, { get() { throw new Error('forced') } }) as unknown as Request
+
+const issueErr = await issueHandler(boom())
+const issueErrJson = await issueErr.json()
+t('issue: a forced error returns a clean 500', issueErr.status === 500)
+t('issue: the error path keeps CORS', issueErr.headers.get('access-control-allow-origin') === '*')
+t('issue: the error path carries a {message,type} envelope', typeof issueErrJson.error?.message === 'string' && typeof issueErrJson.error?.type === 'string')
+
+const connectErr = await connectHandler(boom())
+const connectErrJson = await connectErr.json()
+t('connect: a forced error returns a clean 500', connectErr.status === 500)
+t('connect: the error path keeps CORS', connectErr.headers.get('access-control-allow-origin') === '*')
+t('connect: the error path carries a {message,type} envelope', typeof connectErrJson.error?.message === 'string' && typeof connectErrJson.error?.type === 'string')
+
 console.log('\ndemo page — favicon, theme-color, and a11y polish')
 const { readFileSync } = await import('node:fs')
 const demoHtml = readFileSync(new URL('../public/demo.html', import.meta.url), 'utf8')
