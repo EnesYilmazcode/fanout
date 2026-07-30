@@ -10,6 +10,7 @@ import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
 import { check, LIMITS, clientIp, IP_PROXY_LIMIT, type Verdict } from './ratelimit'
 import { submitJob, awaitResult, type Job } from './queue'
+import { hasSecrets, NOT_CONFIGURED } from './config'
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -39,6 +40,10 @@ function rlHeaders(rl: Verdict) {
 
 /** Verifies the key and meters the request. Returns a Response only on rejection. */
 async function gate(req: Request) {
+  // Verifying the key needs MASTER_SECRET. Without it verifyKey would treat every
+  // key as invalid and return a misleading 401; a 503 tells the truth.
+  if (!hasSecrets('MASTER_SECRET')) return { fail: err(503, NOT_CONFIGURED, 'api_error') }
+
   const auth = await verifyKey(bearer(req))
   if (!auth) {
     return { fail: err(401, 'Missing or invalid Fanout API key. Get one from /api/keys/issue.', 'authentication_error') }
@@ -226,6 +231,10 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
     return err(400, `Unknown model "${body.model}". Use "<provider>/<model>", one of: ${Object.keys(ADAPTERS).join(', ')}, ${RELAY_PROVIDER}.`, 'invalid_request_error', headers)
   }
   const { adapter, model } = routed
+
+  // Opening the sealed connection blobs needs MASTER_ENCRYPTION_KEY. The relay
+  // path above needs no blobs, so this only guards the provider-routed path.
+  if (!hasSecrets('MASTER_ENCRYPTION_KEY')) return err(503, NOT_CONFIGURED, 'api_error', headers)
 
   // Connections are client-held sealed blobs. Sending several is the point:
   // fanout rotates across them and fails over when one is rate-limited or dead.

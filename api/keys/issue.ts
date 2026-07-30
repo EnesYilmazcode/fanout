@@ -2,6 +2,7 @@
 
 import { issueKey } from '../../lib/auth'
 import { check, clientIp, IP_ISSUE_LIMIT } from '../../lib/ratelimit'
+import { hasSecrets, NOT_CONFIGURED } from '../../lib/config'
 
 export const config = { runtime: 'edge' }
 
@@ -31,6 +32,15 @@ async function handleIssue(req: Request): Promise<Response> {
       status: 405,
       headers: { 'content-type': 'application/json', ...CORS },
     })
+  }
+
+  // Minting an HMAC key needs MASTER_SECRET. Without it issueKey throws deep in
+  // WebCrypto; return a clean 503 instead of a bare platform 500.
+  if (!hasSecrets('MASTER_SECRET')) {
+    return new Response(
+      JSON.stringify({ error: { message: NOT_CONFIGURED, type: 'api_error' } }),
+      { status: 503, headers: { 'content-type': 'application/json', ...CORS } },
+    )
   }
 
   // Minting is unauthenticated by design, which makes it the softest spot in the
