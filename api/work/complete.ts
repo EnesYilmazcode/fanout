@@ -5,7 +5,7 @@
 
 import { verifyKey, bearer } from '../../lib/auth'
 import { completeJob } from '../../lib/queue'
-import { check, clientIp } from '../../lib/ratelimit'
+import { check, clientIp, type Verdict } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -13,14 +13,25 @@ const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, content-type',
   'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-expose-headers': 'x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
 }
 
 const MAX_ANSWER_BYTES = 64 * 1024
 const IP_COMPLETE_LIMIT = 30
 
-function json(status: number, obj: unknown) {
+// Rate-limit headers from a limiter Verdict, matching how lib/gateway.ts builds
+// them so a cross-origin worker sees the same envelope on every Fanout endpoint.
+function rlHeaders(rl: Verdict) {
+  return {
+    'x-ratelimit-limit': String(rl.limit),
+    'x-ratelimit-remaining': String(rl.remaining),
+    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
+  }
+}
+
+function json(status: number, obj: unknown, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(obj), {
-    status, headers: { 'content-type': 'application/json', ...CORS },
+    status, headers: { 'content-type': 'application/json', ...CORS, ...extra },
   })
 }
 
@@ -30,25 +41,27 @@ export default async function handler(req: Request): Promise<Response> {
 
   const auth = await verifyKey(bearer(req))
   if (!auth) return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
-  if (!check(`complete:${clientIp(req)}`, IP_COMPLETE_LIMIT).ok) {
-    return json(429, { error: { message: 'Rate limit exceeded.', type: 'rate_limit_error' } })
+  const rl = check(`complete:${clientIp(req)}`, IP_COMPLETE_LIMIT)
+  const rlh = rlHeaders(rl)
+  if (!rl.ok) {
+    return json(429, { error: { message: 'Rate limit exceeded.', type: 'rate_limit_error' } }, rlh)
   }
 
   let body: { id?: string; text?: string }
   try {
     body = (await req.json()) as typeof body
   } catch {
-    return json(400, { error: { message: 'Request body must be valid JSON.' } })
+    return json(400, { error: { message: 'Request body must be valid JSON.' } }, rlh)
   }
 
   const id = body.id ?? ''
   const text = body.text ?? ''
-  if (!/^[0-9a-f-]{36}$/.test(id)) return json(400, { error: { message: 'Field "id" must be the job id from /api/work/next.' } })
-  if (!text) return json(400, { error: { message: 'Field "text" is required.' } })
+  if (!/^[0-9a-f-]{36}$/.test(id)) return json(400, { error: { message: 'Field "id" must be the job id from /api/work/next.' } }, rlh)
+  if (!text) return json(400, { error: { message: 'Field "text" is required.' } }, rlh)
   if (new TextEncoder().encode(text).length > MAX_ANSWER_BYTES) {
-    return json(400, { error: { message: `Answer too large: cap is ${MAX_ANSWER_BYTES / 1024}KB.` } })
+    return json(400, { error: { message: `Answer too large: cap is ${MAX_ANSWER_BYTES / 1024}KB.` } }, rlh)
   }
 
   await completeJob(id, text)
-  return json(200, { ok: true })
+  return json(200, { ok: true }, rlh)
 }

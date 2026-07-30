@@ -232,5 +232,44 @@ await submitJob('claude-code', [{ role: 'user', content: 'warm2' }])
 await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${otherKey}` } }))
 t('a second live node raises the count', (await countLive()) >= baseline + 1)
 
+console.log('\nwork endpoints — consistent rate-limit headers and CORS exposure')
+const rlKey = await issueKey('rl_headers_user', 'free')
+const hasRl = (r: Response) =>
+  r.headers.get('x-ratelimit-limit') !== null &&
+  r.headers.get('x-ratelimit-remaining') !== null &&
+  r.headers.get('x-ratelimit-reset') !== null
+const exposesRl = (r: Response) => {
+  const e = r.headers.get('access-control-expose-headers') ?? ''
+  return e.includes('x-ratelimit-limit') && e.includes('x-ratelimit-remaining') && e.includes('x-ratelimit-reset')
+}
+
+// /api/work/status: a plain GET carries the limiter Verdict as headers, and the
+// same headers are whitelisted for a cross-origin worker to read.
+const statusHdrRes = await workStatus(statusReq(rlKey))
+t('status returns rate-limit headers', hasRl(statusHdrRes))
+t('status exposes rate-limit headers to browsers', exposesRl(statusHdrRes))
+t('status rate-limit-reset is unix seconds', Number(statusHdrRes.headers.get('x-ratelimit-reset')) > 1_600_000_000)
+t('status remaining decrements under limit', Number(statusHdrRes.headers.get('x-ratelimit-remaining')) < Number(statusHdrRes.headers.get('x-ratelimit-limit')))
+
+// /api/work/complete: a 400 (bad job id) still carries the headers — the envelope
+// is consistent across success and rejection, matching lib/gateway.ts.
+const completeHdrRes = await workComplete(new Request('https://x/api/work/complete', {
+  method: 'POST',
+  headers: { authorization: `Bearer ${rlKey}`, 'content-type': 'application/json' },
+  body: JSON.stringify({ id: 'not-a-uuid', text: 'x' }),
+}))
+t('complete rejection still carries rate-limit headers', completeHdrRes.status === 400 && hasRl(completeHdrRes))
+t('complete exposes rate-limit headers to browsers', exposesRl(completeHdrRes))
+
+// /api/work/next: queue a job first so the long-poll returns 200 immediately
+// (an empty poll would hold the full window), then assert the headers ride along.
+await submitJob('claude-code', [{ role: 'user', content: 'rl-header-warm' }])
+const nextHdrRes = await workNext(new Request('https://x/api/work/next', {
+  method: 'POST',
+  headers: { authorization: `Bearer ${rlKey}`, 'x-forwarded-for': '203.0.113.7' },
+}))
+t('next poll returns rate-limit headers', nextHdrRes.status === 200 && hasRl(nextHdrRes))
+t('next exposes rate-limit headers to browsers', exposesRl(nextHdrRes))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

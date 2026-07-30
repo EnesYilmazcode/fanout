@@ -7,7 +7,7 @@
 
 import { verifyKey, bearer } from '../../lib/auth'
 import { nextJob, markLive } from '../../lib/queue'
-import { check, clientIp } from '../../lib/ratelimit'
+import { check, clientIp, type Verdict } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -15,6 +15,17 @@ const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, content-type',
   'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-expose-headers': 'x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
+}
+
+// Rate-limit headers from a limiter Verdict, matching how lib/gateway.ts builds
+// them so a cross-origin worker sees the same envelope on every Fanout endpoint.
+function rlHeaders(rl: Verdict) {
+  return {
+    'x-ratelimit-limit': String(rl.limit),
+    'x-ratelimit-remaining': String(rl.remaining),
+    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
+  }
 }
 
 // Each poll holds the function open for up to POLL_WINDOW_MS, so the limit can
@@ -36,9 +47,11 @@ export default async function handler(req: Request): Promise<Response> {
       status: 401, headers: { 'content-type': 'application/json', ...CORS },
     })
   }
-  if (!check(`poll:${clientIp(req)}`, IP_POLL_LIMIT).ok) {
+  const rl = check(`poll:${clientIp(req)}`, IP_POLL_LIMIT)
+  const rlh = rlHeaders(rl)
+  if (!rl.ok) {
     return new Response(JSON.stringify({ error: { message: 'Polling too fast. One request at a time is enough — each holds for 20s.', type: 'rate_limit_error' } }), {
-      status: 429, headers: { 'content-type': 'application/json', ...CORS },
+      status: 429, headers: { 'content-type': 'application/json', ...CORS, ...rlh },
     })
   }
 
@@ -48,9 +61,9 @@ export default async function handler(req: Request): Promise<Response> {
   await markLive(auth.u)
 
   const job = await nextJob(POLL_WINDOW_MS)
-  if (!job) return new Response(null, { status: 204, headers: CORS })
+  if (!job) return new Response(null, { status: 204, headers: { ...CORS, ...rlh } })
 
   return new Response(JSON.stringify(job), {
-    headers: { 'content-type': 'application/json', ...CORS },
+    headers: { 'content-type': 'application/json', ...CORS, ...rlh },
   })
 }
