@@ -8,8 +8,7 @@ problem privately, what we consider in scope, and where the honest limits are.
 Please do not open a public issue for a security problem. Report it privately instead.
 
 - Use GitHub's private advisory form: the "Report a vulnerability" button under the repository's
-  Security tab.
-- Or email the maintainer at enesyilmaz5157@gmail.com with the details.
+  Security tab. This keeps the report private until a fix is ready.
 
 Tell us what you found, how to reproduce it, and what an attacker gains. A working proof of concept
 helps but is not required. We will confirm we received the report, work the issue, and credit you
