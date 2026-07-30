@@ -19,3 +19,8 @@ jobs:
       # abuse limits, and the full supporter-relay round-trip). Gates every
       # push to main, which is what Vercel deploys to production.
       - run: npm run check
+      # End-to-end test: boots the real edge handlers on a local Node server and
+      # drives them over HTTP (mint key, supporter worker loop, relay round-trip,
+      # and the bring-your-own-keys path against a fake provider). Self-contained
+      # and deterministic — no network, no real providers — so it is CI-safe.
+      - run: npm run test:e2e
