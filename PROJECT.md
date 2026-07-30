@@ -64,6 +64,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 47 | e2e failure-mode coverage (504, 400, 403 over HTTP) | `test` (#50) |
 | 48 | Contributor templates + `CONTRIBUTING.md` | `docs` (#51) |
 | 49 | One-line supporter connect via hosted `/llms.txt` | `feat(web)` (#52) |
+| 50 | Background supporter worker (`claude -p`) + count-based signal | `feat(web)` (#53) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -211,6 +212,16 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (background worker + Upstash reminder)
+
+- **From live testing of the one-liner** (#53): `llms.txt` now tells the agent to run the worker
+  as a background shell and answer each job with headless `claude -p`; the supporter view leads
+  with the global "N supporters online" count (the one-liner mints its own key, so the browser's
+  per-key connected light never fires). **Reminder made concrete:** the count and the relay only
+  work in production once `UPSTASH_REDIS_REST_URL`/`_TOKEN` are set — Vercel's serverless
+  instances do not share the in-memory fallback, so a supporter and the site land on different
+  instances. This is the founder's next setup step (Upstash free tier), not a code change.
 
 ### 2026-07-30 (one-line supporter connect)
 
