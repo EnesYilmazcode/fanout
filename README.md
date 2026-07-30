@@ -1,10 +1,14 @@
 # Fanout
 
-One OpenAI-shaped endpoint that routes to Anthropic, OpenAI, or Groq using API keys the caller
-brings. Hand it several keys at once and it treats them as a pool, picking one at random and
-falling over to the next when one is rate limited or dead.
+One OpenAI-shaped endpoint with two ways to get an answer:
 
-Runs on Vercel's free tier. No database, no runtime dependencies.
+- **Bring your own keys.** Route to Anthropic, OpenAI, or Groq with credentials you supply,
+  pooled and failed over. This is the original, stateless core — see [`/demo.html`](https://fanout-tawny.vercel.app/demo.html).
+- **The supporter relay.** Call the `claude-code` model and your request is answered by a
+  supporter running the worker loop on their own machine — no provider key needed on your side.
+
+The home page mints your key on load and shows both. Runs on Vercel's free tier; the relay uses
+Upstash Redis when configured and an in-memory per-instance queue otherwise.
 
 Live at https://fanout-tawny.vercel.app
 
@@ -71,6 +75,21 @@ half-dead pool is visible per request instead of silently degrading. Eight blobs
 the cap, because failover is serial and an uncapped pool turns one call into a hundred upstream
 calls.
 
+## The supporter relay
+
+Calling the `claude-code` model skips providers entirely. The request is flattened to a job and
+dropped on a queue; a supporter's machine — running the worker loop from the home page's
+"Become a supporter" view — long-polls `POST /api/work/next`, answers the conversation, and
+delivers it with `POST /api/work/complete`. The waiting user request picks the answer up and
+returns it OpenAI-shaped. No connection blob is required for `claude-code` calls.
+
+The job id is an unguessable UUID and doubles as the capability to complete it; jobs carry only
+the model and flattened messages, never the requester's id or IP. Two honest limits: supporters
+see prompts (and users see answers) in plaintext — the relay is a trust relationship, stated at
+the point a supporter starts — and the queue is per-instance in memory unless
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` are set, so a single-region demo works out
+of the box but a user and supporter on different edge instances only meet once Upstash is wired.
+
 ## Endpoints
 
 | Method | Path | Purpose |
@@ -78,11 +97,13 @@ calls.
 | `POST` | `/api/keys/issue` | Mint a Fanout key |
 | `POST` | `/api/connect` | Seal a provider credential into a connection blob |
 | `POST` | `/api/v1/chat/completions` | The proxy, OpenAI-compatible, streaming supported |
+| `POST` | `/api/work/next` | Supporter: long-poll for the next queued job |
+| `POST` | `/api/work/complete` | Supporter: deliver an answer for a job |
 | `GET` | `/api/v1/models` | List available providers |
 | `GET` | `/api/health` | Liveness and whether the secrets are configured |
 
-Models are provider-prefixed: `anthropic/claude-opus-5`, `openai/gpt-4o`,
-`groq/llama-3.3-70b-versatile`.
+Provider models are prefixed: `anthropic/claude-opus-5`, `openai/gpt-4o`,
+`groq/llama-3.3-70b-versatile`. The relay model is `claude-code`.
 
 ## Using it from code
 

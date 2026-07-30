@@ -146,5 +146,53 @@ t('pool health lists the winner last', ph.endsWith(':ok'), ph)
 t('attempt count matches the walk', healthRes.headers.get('x-fanout-attempt') === '2')
 t('pool health is exposed to browsers', (healthRes.headers.get('access-control-expose-headers') ?? '').includes('x-fanout-pool-health'))
 
+console.log('\nsupporter relay — claude-code jobs round-trip through the queue')
+const workNext = (await import('../api/work/next.ts')).default
+const workComplete = (await import('../api/work/complete.ts')).default
+const userKey = await issueKey('relay_user', 'free')
+const supporterKey = await issueKey('supporter_1', 'free')
+
+const relayReq = (body: unknown) => new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${userKey}` },
+  body: JSON.stringify(body),
+})
+
+// A supporter cycle, exactly as the pasted worker brief describes it: poll,
+// answer the last message, deliver. Runs concurrently with the user's request.
+const supporterCycle = async () => {
+  const polled = await workNext(new Request('https://x/api/work/next', {
+    method: 'POST', headers: { authorization: `Bearer ${supporterKey}` },
+  }))
+  if (polled.status !== 200) return { polled: polled.status, job: null as any, delivered: 0 }
+  const job = await polled.json()
+  const delivered = await workComplete(new Request('https://x/api/work/complete', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${supporterKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ id: job.id, text: `echo:${job.messages.at(-1).content}` }),
+  }))
+  return { polled: polled.status, job, delivered: delivered.status }
+}
+
+t('polling without a key is rejected', (await workNext(new Request('https://x/', { method: 'POST' }))).status === 401)
+
+const cycle = supporterCycle()
+const relayRes = await chatCompletions(relayReq({ model: 'claude-code', messages: [{ role: 'user', content: 'ping-relay' }] }))
+const side = await cycle
+const relayJson = await relayRes.json()
+
+t('supporter received a job', side.polled === 200 && side.job?.id?.length === 36)
+t('job carries no requester identity', !JSON.stringify(side.job).includes('relay_user'))
+t('delivery is accepted', side.delivered === 200)
+t('user gets the supporter answer', relayRes.status === 200 && relayJson.choices?.[0]?.message?.content === 'echo:ping-relay', JSON.stringify(relayJson.choices?.[0] ?? relayJson))
+t('relay response is OpenAI-shaped', relayJson.object === 'chat.completion' && relayJson.choices[0].finish_reason === 'stop')
+t('provider header names the relay', relayRes.headers.get('x-fanout-provider') === 'claude-code')
+
+const cycle2 = supporterCycle()
+const streamRes = await chatCompletions(relayReq({ model: 'claude-code/default', stream: true, messages: [{ role: 'user', content: 'ping-sse' }] }))
+await cycle2
+const sseText = await streamRes.text()
+t('stream:true yields SSE with the answer', sseText.includes('echo:ping-sse') && sseText.trimEnd().endsWith('data: [DONE]'))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

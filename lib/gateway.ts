@@ -9,6 +9,7 @@ import { verifyKey, bearer } from './auth'
 import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
 import { check, LIMITS, clientIp, IP_PROXY_LIMIT, type Verdict } from './ratelimit'
+import { submitJob, awaitResult, type Job } from './queue'
 
 export const CORS = {
   'access-control-allow-origin': '*',
@@ -72,8 +73,76 @@ export async function listModels(req: Request): Promise<Response> {
   const g = await gate(req)
   if (g.fail) return g.fail
   return new Response(
-    JSON.stringify({ object: 'list', data: Object.keys(ADAPTERS).map((id) => ({ id, object: 'provider' })) }),
+    JSON.stringify({
+      object: 'list',
+      data: [...Object.keys(ADAPTERS), RELAY_PROVIDER].map((id) => ({ id, object: 'provider' })),
+    }),
     { headers: { 'content-type': 'application/json', ...CORS, ...g.headers } },
+  )
+}
+
+// --- the supporter relay --------------------------------------------------
+
+// "claude-code/<anything>" routes to the supporter queue instead of a provider:
+// the request needs no connection blobs, because supporters' machines are the
+// capacity. Non-streaming in substance; stream:true gets the finished answer as
+// a single SSE chunk so OpenAI clients that always stream still work.
+export const RELAY_PROVIDER = 'claude-code'
+const RELAY_WAIT_MS = 25_000
+const MAX_JOB_BYTES = 32 * 1024
+
+/** OpenAI content can be a string or an array of typed parts; jobs carry plain text. */
+function flatten(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('')
+  }
+  return ''
+}
+
+async function relayCompletion(body: ChatRequest, headers: Record<string, string>): Promise<Response> {
+  const messages: Job['messages'] = body.messages.map((m) => ({ role: String(m.role), content: flatten(m.content) }))
+  const payload = JSON.stringify(messages)
+  if (payload.length > MAX_JOB_BYTES) {
+    return err(400, `Request too large for the relay: cap is ${MAX_JOB_BYTES / 1024}KB of messages.`, 'invalid_request_error', headers)
+  }
+
+  const id = await submitJob(body.model, messages)
+  const text = await awaitResult(id, RELAY_WAIT_MS)
+  if (text === null) {
+    return err(
+      504,
+      'No supporter picked this up in time. The relay only works while a supporter is online — try again, or become one.',
+      'api_error',
+      headers,
+    )
+  }
+
+  const created = Math.floor(Date.now() / 1000)
+  const relayHeaders = { ...headers, 'x-fanout-provider': RELAY_PROVIDER }
+
+  if (body.stream) {
+    const chunk = {
+      id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
+      choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }],
+    }
+    const fin = {
+      id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
+      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    }
+    const sse = `data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(fin)}\n\ndata: [DONE]\n\n`
+    return new Response(sse, {
+      headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', ...CORS, ...relayHeaders },
+    })
+  }
+
+  return new Response(
+    JSON.stringify({
+      id: `chatcmpl-${id}`, object: 'chat.completion', created, model: body.model,
+      choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    }),
+    { headers: { 'content-type': 'application/json', ...CORS, ...relayHeaders } },
   )
 }
 
@@ -98,9 +167,13 @@ export async function chatCompletions(req: Request): Promise<Response> {
     return err(400, 'Field "messages" must be a non-empty array.', 'invalid_request_error', headers)
   }
 
+  if (body.model === RELAY_PROVIDER || body.model.startsWith(`${RELAY_PROVIDER}/`)) {
+    return relayCompletion(body, headers)
+  }
+
   const routed = route(body.model)
   if (!routed) {
-    return err(400, `Unknown model "${body.model}". Use "<provider>/<model>", one of: ${Object.keys(ADAPTERS).join(', ')}.`, 'invalid_request_error', headers)
+    return err(400, `Unknown model "${body.model}". Use "<provider>/<model>", one of: ${Object.keys(ADAPTERS).join(', ')}, ${RELAY_PROVIDER}.`, 'invalid_request_error', headers)
   }
   const { adapter, model } = routed
 

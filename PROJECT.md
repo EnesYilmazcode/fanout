@@ -33,6 +33,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
 | 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
 | 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
+| 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -180,6 +181,27 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (relay + centered homepage)
+
+- **Supporter relay built.** New `claude-code` model routes through a work queue instead of a
+  provider: `lib/queue.ts` (Upstash REST when configured, per-instance memory otherwise) plus
+  `POST /api/work/next` (supporter long-poll) and `POST /api/work/complete` (deliver). A user's
+  `claude-code` request submits a job and waits up to 25s for a supporter's answer, returned
+  OpenAI-shaped (streaming supported as a single chunk). Jobs carry only model + flattened
+  messages — no requester id or IP; the job UUID is the completion capability. Eight new smoke
+  assertions cover the full round-trip (35 total).
+- **Homepage rebuilt to the centered two-mode spec**: title centered, a single key box with
+  regenerate on the left and a copy icon on the right, and a top-right toggle to the supporter
+  view, which shows a copy-paste worker brief for Claude Code embedding the user's key. The
+  bring-your-own-keys UI stays at `/demo.html`. Verified in-browser under the CSP, 14 checks.
+
+  Design-note carried forward for honesty: the relay is a plaintext trust relationship
+  (supporters read prompts, users read answers), and running the worker on a Claude subscription
+  is the supporter's own ToS risk, disclosed where the worker starts. The earlier review killed
+  the relay *as an anonymous marketplace*; this is the founder's explicit direction to ship it
+  as a free, opt-in supporter network. The AAD owner-binding on provider connections is
+  untouched — the relay is a separate path that needs no blobs.
 
 ### 2026-07-30 (later)
 
