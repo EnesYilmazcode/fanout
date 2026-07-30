@@ -44,6 +44,12 @@ stale relative to the code. Newest entries at the top of each log.
 | 27 | Token usage in streaming responses | `feat(providers)` (#11) |
 | 28 | `/api/health` reports queue backend + supporters online | `feat` (#12) |
 | 29 | Rate-limit headers on `/api/work/*` | `feat(relay)` (#13) |
+| 30 | End-to-end HTTP integration test — `npm run test:e2e` | `test` (#15) |
+| 31 | Dead-code sweep (unused exports demoted) | `refactor` (#21) |
+| 32 | Defensive error wrappers on key + connect endpoints | `fix` (#22) |
+| 33 | README polish + supporter walkthrough | `docs` (#23) |
+| 34 | Demo page favicon + theme-color + a11y parity | `feat(web)` (#24) |
+| 35 | OPTIONS/CORS preflight on `/api/health` | `feat` (#25) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -191,6 +197,19 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (overnight — end-to-end test + second fleet)
+
+- **End-to-end HTTP test** (#15, `npm run test:e2e`): boots the real handlers on a local server
+  and drives a full supporter round trip over HTTP (a real worker loop polls, answers, and the
+  `claude-code` reply comes back, streaming and not), plus the bring-your-own-keys path against a
+  fake provider. Proves the whole system works, not just units.
+- **Second parallel fleet** (issues #16-#20, PRs #21-#25): dead-code sweep (three unused exports
+  in `lib/gateway.ts` demoted to module-local), defensive error wrappers on the key and connect
+  endpoints so nothing leaks a bare platform 500, a README polish pass, favicon/theme-color/a11y
+  parity for the demo page, and an OPTIONS/CORS preflight on `/api/health`.
+- Continuous overnight loop runs from the main session (GitHub tools + Workflow engine); the
+  hourly cron is disabled while it runs to avoid two workers racing.
 
 ### 2026-07-30 (parallel fleet — six PRs)
 
