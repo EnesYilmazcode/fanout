@@ -23,6 +23,16 @@ function json(status: number, obj: unknown) {
 }
 
 export default async function handler(req: Request): Promise<Response> {
+  try {
+    return await handleConnect(req)
+  } catch {
+    // Last line of defence: anything unforeseen becomes a clean JSON envelope
+    // with CORS, never a bare platform error page.
+    return json(500, { error: { message: 'Internal error sealing the connection.', type: 'api_error' } })
+  }
+}
+
+async function handleConnect(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json(405, { error: { message: 'Use POST.' } })
 
