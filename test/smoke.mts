@@ -82,6 +82,27 @@ const text = out.split('\n\n')
 t('deltas reassemble across a split chunk', text === 'Hello!', JSON.stringify(text))
 t('stream terminates with [DONE]', out.trimEnd().endsWith('data: [DONE]'))
 t('stream reports a finish_reason', out.includes('"finish_reason":"stop"'))
+t('default stream carries no usage chunk', !out.includes('"usage"'))
+
+// stream_options.include_usage: capture message_delta.usage and emit a final
+// OpenAI-shaped usage chunk (empty choices) right before [DONE].
+const usageRaw = [
+  'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_u","usage":{"input_tokens":11,"output_tokens":0}}}\n\n',
+  'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}\n\n',
+  'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":4}}\n\n',
+]
+const usageUpstream = new ReadableStream<Uint8Array>({
+  start(c) { for (const s of usageRaw) c.enqueue(new TextEncoder().encode(s)); c.close() },
+})
+let usageOut = ''
+for await (const chunk of ADAPTERS.anthropic.translateStream(usageUpstream, 'anthropic/claude-opus-5', true) as any) {
+  usageOut += new TextDecoder().decode(chunk)
+}
+const usageFrames = usageOut.split('\n\n').filter((l) => l.startsWith('data: ') && !l.includes('[DONE]')).map((l) => JSON.parse(l.slice(6)))
+const usageChunk = usageFrames.find((c) => c.usage)
+t('opt-in stream emits a usage chunk before [DONE]', !!usageChunk && Array.isArray(usageChunk.choices) && usageChunk.choices.length === 0, JSON.stringify(usageChunk))
+t('usage chunk maps anthropic token counts', usageChunk?.usage.prompt_tokens === 11 && usageChunk?.usage.completion_tokens === 4 && usageChunk?.usage.total_tokens === 15, JSON.stringify(usageChunk?.usage))
+t('usage chunk is the last frame before [DONE]', usageOut.trimEnd().endsWith('data: [DONE]') && JSON.stringify(usageFrames.at(-1)) === JSON.stringify(usageChunk))
 
 console.log('\nratelimit')
 for (let i = 0; i < 20; i++) check('user_a', 20)
