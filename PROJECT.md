@@ -63,6 +63,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 46 | Clean 503 when server secrets are unconfigured | `fix` (#47) |
 | 47 | e2e failure-mode coverage (504, 400, 403 over HTTP) | `test` (#50) |
 | 48 | Contributor templates + `CONTRIBUTING.md` | `docs` (#51) |
+| 49 | One-line supporter connect via hosted `/llms.txt` | `feat(web)` (#52) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -210,6 +211,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (one-line supporter connect)
+
+- **The intended supporter flow** (#52): a supporter tells Claude Code one line, "Connect to
+  <site> and run as a Fanout supporter," and Claude fetches `public/llms.txt` and runs the
+  poll/answer/complete loop itself, minting its own key. Nothing to paste, no key to copy. The
+  supporter view leads with the copyable one-liner; the full manual brief is a collapsible
+  fallback. Homepage links agents at `/llms.txt`.
 
 ### 2026-07-30 (overnight — sixth fleet)
 
