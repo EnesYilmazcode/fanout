@@ -69,7 +69,20 @@ $('btn-copy-worker').addEventListener('click', (e) => {
   })
 })
 
+$('btn-copy-connect').addEventListener('click', (e) => {
+  copy(e.currentTarget, connectLine(), (btn) => {
+    btn.classList.add('done')
+    setTimeout(() => btn.classList.remove('done'), 1200)
+  })
+})
+
 // --- supporter brief ------------------------------------------------------
+
+// The one line a supporter gives Claude Code. Claude fetches /llms.txt from the
+// site and runs the worker loop from there — no key to copy, nothing to paste.
+function connectLine() {
+  return `Connect to ${origin} and run as a Fanout supporter: fetch ${origin}/llms.txt and follow it, answering jobs until I tell you to stop.`
+}
 
 function workerBrief() {
   const key = fanoutKey || '<your key>'
@@ -140,5 +153,6 @@ $('mode-switch').addEventListener('click', () => {
 // --- init -----------------------------------------------------------------
 
 $('base-url').textContent = origin + '/api/v1'
+$('connect-line').textContent = connectLine()
 render()
 ensureKey().then(startWatching)
