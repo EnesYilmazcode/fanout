@@ -299,5 +299,13 @@ t('health reports the queue backend', healthBody.queue === 'memory', healthBody.
 t('health reports supporters_online as a number', typeof healthBody.supporters_online === 'number')
 t('health supporters_online matches countLive', healthBody.supporters_online === (await countLive()))
 
+console.log('\ndemo page — favicon, theme-color, and a11y polish')
+const { readFileSync } = await import('node:fs')
+const demoHtml = readFileSync(new URL('../public/demo.html', import.meta.url), 'utf8')
+t('demo references the shared /favicon.svg', demoHtml.includes('href="/favicon.svg"'))
+t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color" content="#0d0f12"'))
+t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
+t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

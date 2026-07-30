@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0d0f12" />
 <title>Fanout — live demo</title>
 <meta name="description" content="One endpoint, all your keys. A stateless multi-provider AI proxy with automatic failover, running on the edge." />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <style>
   :root {
     --bg: #0d0f12; --panel: #14171c; --line: #232830; --ink: #e8eaed;
@@ -32,6 +34,9 @@
     border: 0; border-radius: 7px; font-weight: 650; font-size: 14px; cursor: pointer;
   }
   button:disabled { opacity: 0.45; cursor: default; }
+  :focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 7px;
+  }
   pre {
     margin: 14px 0 0; padding: 13px; background: #0a0c0f; border: 1px solid var(--line);
     border-radius: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--ok);
@@ -58,8 +63,8 @@
   <h2>1 · Get a Fanout key</h2>
   <div class="card">
     <label for="handle">Handle (cosmetic — every key gets its own isolated id)</label>
-    <input id="handle" placeholder="enes" />
-    <button id="btn-key">Issue key</button>
+    <input id="handle" placeholder="enes" aria-label="Handle" />
+    <button id="btn-key" aria-label="Issue a Fanout key">Issue key</button>
     <pre id="out-key"></pre>
   </div>
 
@@ -72,7 +77,7 @@
     <div class="row">
       <div>
         <label for="provider">Provider</label>
-        <select id="provider">
+        <select id="provider" aria-label="Provider">
           <option value="anthropic">anthropic</option>
           <option value="openai">openai</option>
           <option value="groq">groq</option>
@@ -80,12 +85,12 @@
       </div>
       <div>
         <label for="label">Label</label>
-        <input id="label" placeholder="my personal key" />
+        <input id="label" placeholder="my personal key" aria-label="Connection label" />
       </div>
     </div>
     <label for="provider-key">Provider API key</label>
-    <input id="provider-key" type="password" placeholder="sk-ant-..." />
-    <button id="btn-connect">Seal connection</button>
+    <input id="provider-key" type="password" placeholder="sk-ant-..." aria-label="Provider API key" />
+    <button id="btn-connect" aria-label="Seal the provider connection">Seal connection</button>
     <div class="pool" id="pool"></div>
     <pre id="out-connect"></pre>
   </div>
@@ -93,10 +98,10 @@
   <h2>3 · Call it</h2>
   <div class="card">
     <label for="model">Model</label>
-    <input id="model" value="anthropic/claude-opus-5" />
+    <input id="model" value="anthropic/claude-opus-5" aria-label="Model" />
     <label for="prompt">Prompt</label>
-    <textarea id="prompt">Explain what an API proxy is, in two sentences.</textarea>
-    <button id="btn-run">Send</button>
+    <textarea id="prompt" aria-label="Prompt">Explain what an API proxy is, in two sentences.</textarea>
+    <button id="btn-run" aria-label="Send the prompt">Send</button>
     <pre id="out-run"></pre>
   </div>
 
