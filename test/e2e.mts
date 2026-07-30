@@ -109,8 +109,66 @@ t('minting returns a fo_live_ key', typeof mint.key === 'string' && mint.key.sta
 const KEY = mint.key
 const clientAuth = { authorization: `Bearer ${KEY}`, 'x-forwarded-for': '10.0.0.2' }
 
-// A single supporter key drives the worker (it is just a user who polls).
+// A single supporter key drives the worker (it is just a user who polls). Mint
+// it now, but start the worker AFTER the failure-mode block below — several of
+// those cases (especially the 504) depend on there being no supporter online.
 const supKey = (await (await post('/api/keys/issue', {}, { 'x-forwarded-for': '10.0.0.1' })).json()).key
+
+// --- failure modes over real HTTP --------------------------------------------
+// Run while nothing is polling the relay. (a) needs an empty relay so the wait
+// window actually elapses; it is the one deliberately-slow case (~20s), kept
+// single and up front so the whole file still finishes under the Edge budget.
+// The others are immediate — they reject before any upstream fetch.
+
+console.log('\ne2e — failure (a): claude-code with no supporter online -> clean 504')
+{
+  const r = await post('/api/v1/chat/completions', {
+    model: 'claude-code', messages: [{ role: 'user', content: 'anyone-home' }],
+  }, clientAuth)
+  const j = await r.json()
+  t('no-supporter relay returns 504', r.status === 504, `status=${r.status}`)
+  t('504 carries an OpenAI-shaped error envelope', j.error?.type === 'api_error' && typeof j.error?.message === 'string')
+  t('504 body is JSON, not a platform HTML page', (r.headers.get('content-type') ?? '').includes('application/json'))
+  // The unclaimed job stays queued; the worker harmlessly drains it once started.
+}
+
+console.log('\ne2e — failure (b): oversized proxy body -> 400')
+{
+  const pad = 'x'.repeat(300 * 1024) // past MAX_BODY_BYTES (256KB); caught before any parse
+  const r = await post('/api/v1/chat/completions', {
+    model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }], pad,
+  }, clientAuth)
+  const j = await r.json()
+  t('oversized body is rejected with 400', r.status === 400, `status=${r.status}`)
+  t('oversized rejection is a clean JSON envelope', j.error?.type === 'invalid_request_error' && /too large/i.test(j.error?.message ?? ''))
+}
+
+console.log('\ne2e — failure (c): a blob sealed under one key is rejected 403 for another')
+{
+  const sealed = await (await post('/api/connect', { provider: 'anthropic', apiKey: 'sk-ant-victim99', label: 'victim' }, clientAuth)).json()
+  t('the victim blob seals for its owner', typeof sealed.connection === 'string' && sealed.connection.startsWith('fc_'))
+  // A different Fanout key presents the same blob. The AAD owner-binding makes it
+  // undecryptable for anyone but the sealer, so the pool opens to nothing -> 403.
+  const otherAuth = { authorization: `Bearer ${supKey}`, 'x-forwarded-for': '10.9.9.9' }
+  const r = await post('/api/v1/chat/completions', {
+    model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'not mine' }],
+  }, { ...otherAuth, 'x-fanout-connection': sealed.connection })
+  const j = await r.json()
+  t('cross-key blob use is rejected with 403', r.status === 403, `status=${r.status}`)
+  t('403 is a permission_error envelope', j.error?.type === 'permission_error')
+}
+
+console.log('\ne2e — failure (d): provider model with no X-Fanout-Connection -> clear 4xx')
+{
+  const r = await post('/api/v1/chat/completions', {
+    model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }],
+  }, clientAuth)
+  const j = await r.json()
+  t('missing connection is a clear 4xx', r.status === 400, `status=${r.status}`)
+  t('the message tells the caller to send X-Fanout-Connection', /x-fanout-connection/i.test(j.error?.message ?? ''))
+}
+
+// --- now bring a supporter online and run the happy path ---------------------
 const workerTask = supporter(supKey)
 await new Promise((r) => setTimeout(r, 300)) // let the worker start polling
 
