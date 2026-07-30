@@ -35,6 +35,9 @@ stale relative to the code. Newest entries at the top of each log.
 | 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
 | 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
 | 20 | Supporter presence — node heartbeat + `/api/work/status`, live "connected" light | `feat(relay)` |
+| 21 | Live "N supporters online" count on both views (global presence) | `feat(relay)` |
+| 22 | Relay hardening — 7 findings from adversarial review fixed | `fix(relay)` |
+| 23 | CI (GitHub Actions runs `npm run check`) + `CLAUDE.md` working notes | `chore` |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -182,6 +185,27 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (review hardening + online count)
+
+- **Live "N supporters online" count** on both the use view (so a caller knows `claude-code` will
+  be answered) and the supporter view, backed by a global presence count in the queue (Redis
+  sorted set / in-memory map). Status endpoint now returns `{connected, online}`.
+- **Adversarial review of the relay, 7 confirmed findings fixed** (full run archived under the
+  session; verified against source before fixing):
+  1. Uncaught exceptions in the relay path returned a bare Edge 500 with no CORS/OpenAI envelope
+     → whole handler wrapped, queue errors become a clean 502, null/again message elements coerced.
+  2. `flatten()` silently relayed an empty prompt for text-less content → rejected with 400.
+  3–4. 25s relay wait raced Vercel Edge's ~25s deadline (platform 504 HTML) and 504'd healthy
+     relays → `RELAY_WAIT_MS` cut to 20s, safely under the deadline, returns our own clean 504.
+  5. In-memory job queue grew unbounded with no supporter polling → age-trim + `MAX_QUEUE` cap
+     on push (both stores).
+  6. Memory results map leaked → opportunistic sweep.
+  7. Upstash busy-poll (~100k commands/day per idle supporter) → **BRPOP** blocking pop (one
+     command per poll window) and one-command presence heartbeat. ~25× cheaper.
+- **CI**: `.github/workflows/ci.yml` runs `npm run check` on every push to main and every PR —
+  the gate for the overnight autonomous improvement loop. Added `CLAUDE.md` working notes.
+- Smoke suite now 50 assertions (relay guards, presence, global count).
 
 ### 2026-07-30 (supporter presence)
 

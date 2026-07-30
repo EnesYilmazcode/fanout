@@ -6,7 +6,7 @@
 // of its own node — no cross-user visibility.
 
 import { verifyKey, bearer } from '../../lib/auth'
-import { isLive } from '../../lib/queue'
+import { isLive, countLive } from '../../lib/queue'
 import { check, clientIp } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
@@ -37,5 +37,6 @@ export default async function handler(req: Request): Promise<Response> {
     return json(429, { error: { message: 'Polling status too fast.', type: 'rate_limit_error' } })
   }
 
-  return json(200, { connected: await isLive(auth.u) })
+  const [connected, online] = await Promise.all([isLive(auth.u), countLive()])
+  return json(200, { connected, online })
 }

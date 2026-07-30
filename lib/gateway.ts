@@ -88,7 +88,11 @@ export async function listModels(req: Request): Promise<Response> {
 // capacity. Non-streaming in substance; stream:true gets the finished answer as
 // a single SSE chunk so OpenAI clients that always stream still work.
 export const RELAY_PROVIDER = 'claude-code'
-const RELAY_WAIT_MS = 25_000
+// Kept safely under Vercel Edge's ~25s initial-response deadline: the relay
+// buffers (emits nothing until the answer arrives), so if this exceeded the
+// platform limit a no-supporter timeout would surface as platform 504 HTML
+// instead of our clean JSON. We return our own 504 first.
+const RELAY_WAIT_MS = 20_000
 const MAX_JOB_BYTES = 32 * 1024
 
 /** OpenAI content can be a string or an array of typed parts; jobs carry plain text. */
@@ -101,14 +105,30 @@ function flatten(content: unknown): string {
 }
 
 async function relayCompletion(body: ChatRequest, headers: Record<string, string>): Promise<Response> {
-  const messages: Job['messages'] = body.messages.map((m) => ({ role: String(m.role), content: flatten(m.content) }))
+  // Message elements are unknown-typed from the wire; a null or non-object entry
+  // would throw on property access, so coerce defensively rather than trust them.
+  const messages: Job['messages'] = body.messages.map((m) => ({
+    role: String((m as { role?: unknown })?.role ?? 'user'),
+    content: flatten((m as { content?: unknown })?.content),
+  }))
+  if (!messages.some((m) => m.content.trim() !== '')) {
+    return err(400, 'No text content to relay. The claude-code model needs at least one message with text.', 'invalid_request_error', headers)
+  }
   const payload = JSON.stringify(messages)
   if (payload.length > MAX_JOB_BYTES) {
     return err(400, `Request too large for the relay: cap is ${MAX_JOB_BYTES / 1024}KB of messages.`, 'invalid_request_error', headers)
   }
 
-  const id = await submitJob(body.model, messages)
-  const text = await awaitResult(id, RELAY_WAIT_MS)
+  let id: string
+  let text: string | null
+  try {
+    id = await submitJob(body.model, messages)
+    text = await awaitResult(id, RELAY_WAIT_MS)
+  } catch {
+    // A queue-backend hiccup (e.g. transient Upstash 5xx) must not escape as a
+    // bare platform 500 with no CORS or error envelope.
+    return err(502, 'The relay queue is temporarily unavailable. Try again shortly.', 'api_error', headers)
+  }
   if (text === null) {
     return err(
       504,
@@ -147,6 +167,16 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
 }
 
 export async function chatCompletions(req: Request): Promise<Response> {
+  try {
+    return await chatCompletionsInner(req)
+  } catch {
+    // Last line of defence: anything unforeseen becomes a clean OpenAI-shaped
+    // 500 with CORS, never a bare platform error page.
+    return err(500, 'Internal error handling the request.', 'api_error')
+  }
+}
+
+async function chatCompletionsInner(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return preflight()
   if (req.method !== 'POST') return err(405, 'Use POST for /api/v1/chat/completions')
 

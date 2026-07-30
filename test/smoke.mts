@@ -176,6 +176,13 @@ const supporterCycle = async () => {
 
 t('polling without a key is rejected', (await workNext(new Request('https://x/', { method: 'POST' }))).status === 401)
 
+// Malformed relay inputs must fail cleanly (400), never throw a bare 500.
+const nullMsg = await chatCompletions(relayReq({ model: 'claude-code', messages: [null] }))
+t('a null message element is a clean 400', nullMsg.status === 400 && nullMsg.headers.get('access-control-allow-origin') === '*')
+const imgOnly = await chatCompletions(relayReq({ model: 'claude-code', messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:x' } }] }] }))
+const imgJson = await imgOnly.json()
+t('a text-less prompt is rejected, not blank-relayed', imgOnly.status === 400 && /no text content/i.test(imgJson.error.message))
+
 const cycle = supporterCycle()
 const relayRes = await chatCompletions(relayReq({ model: 'claude-code', messages: [{ role: 'user', content: 'ping-relay' }] }))
 const side = await cycle
@@ -211,9 +218,19 @@ const after = await (await workStatus(statusReq(presenceUser))).json()
 t('polling marks the node connected', after.connected === true)
 
 // Presence is scoped to the key — a different user never sees this node.
-const other = await (await workStatus(statusReq(await issueKey('someone_else', 'free')))).json()
+const otherKey = await issueKey('someone_else', 'free')
+const other = await (await workStatus(statusReq(otherKey))).json()
 t('presence does not leak across keys', other.connected === false)
 t('status needs a key', (await workStatus(new Request('https://x/api/work/status'))).status === 401)
+
+// Global count: presenceUser polled above, so at least one node is live and the
+// count is visible to any key, including one whose own node is offline.
+t('status reports a global online count', typeof other.online === 'number' && other.online >= 1)
+const { countLive } = await import('../lib/queue.ts')
+const baseline = await countLive()
+await submitJob('claude-code', [{ role: 'user', content: 'warm2' }])
+await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${otherKey}` } }))
+t('a second live node raises the count', (await countLive()) >= baseline + 1)
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

@@ -87,34 +87,45 @@ function workerBrief() {
 Note: jobs are strangers' prompts in plaintext, and they receive your answers verbatim.`
 }
 
-// --- presence: light up when the supporter's node starts polling ----------
+// --- presence: how many supporter nodes are live, and is yours one ---------
 
 let statusTimer = null
 
-function setStatus(connected) {
-  const box = $('status')
-  box.classList.toggle('live', connected)
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+
+function renderStatus({ connected, online }) {
+  // Use view: a plain count so a user knows whether claude-code will get answered.
+  const useBox = $('use-status')
+  useBox.classList.toggle('live', online > 0)
+  $('use-text').textContent = online > 0
+    ? `${plural(online, 'supporter', 'supporters')} online`
+    : 'No supporters online right now'
+
+  // Supporter view: is *your* node connected, plus the community size.
+  $('status').classList.toggle('live', connected)
   $('status-text').textContent = connected
     ? 'Connected — your machine is answering requests.'
     : 'Waiting for your node to connect…'
+  const others = Math.max(0, online - (connected ? 1 : 0))
+  $('support-online').textContent = others > 0
+    ? `${plural(others, 'other supporter', 'other supporters')} online too.`
+    : ' '
 }
 
 async function pollStatus() {
   if (!fanoutKey) return
   try {
     const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${fanoutKey}` } })
-    if (res.ok) setStatus((await res.json()).connected === true)
+    if (res.ok) {
+      const data = await res.json()
+      renderStatus({ connected: data.connected === true, online: Number(data.online) || 0 })
+    }
   } catch { /* transient — the next tick retries */ }
 }
 
 function startWatching() {
-  setStatus(false)
   pollStatus()
-  statusTimer = setInterval(pollStatus, 3000)
-}
-
-function stopWatching() {
-  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
+  if (!statusTimer) statusTimer = setInterval(pollStatus, 3000)
 }
 
 // --- mode switch ----------------------------------------------------------
@@ -124,12 +135,10 @@ $('mode-switch').addEventListener('click', () => {
   $('view-use').hidden = supporting
   $('view-support').hidden = !supporting
   $('mode-switch').textContent = supporting ? 'Get a key' : 'Become a supporter'
-  if (supporting) startWatching()
-  else stopWatching()
 })
 
 // --- init -----------------------------------------------------------------
 
 $('base-url').textContent = origin + '/api/v1'
 render()
-ensureKey()
+ensureKey().then(startWatching)
