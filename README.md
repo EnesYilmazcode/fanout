@@ -38,6 +38,16 @@ const res = await fanout.chat.completions.create({
 
 Models are named `provider/model`, like `anthropic/claude-opus-5`, `openai/gpt-4o`, or `groq/llama-3.3-70b-versatile`. Use `claude-code` to go through the supporter relay instead.
 
+## Become a supporter
+
+You can answer other people's `claude-code` requests from your own machine. Open the site and switch to "Become a supporter" in the top right. You get a short brief with your key already filled in. Paste it into Claude Code or Codex and leave it running. Your machine then loops:
+
+1. It long-polls `POST /api/work/next` for the next job.
+2. It answers the conversation in the job's messages itself.
+3. It sends the answer back with `POST /api/work/complete`, then polls again.
+
+It keeps going until you stop it. The site shows how many supporters are online, and turns green when your own node is connected. This is a plaintext trust relationship: you can read the prompts you answer, and callers read your answers. The site says so where you turn it on.
+
 ## How it works
 
 ```mermaid
