@@ -14,6 +14,8 @@ export default async function handler(req?: Request): Promise<Response> {
   return new Response(
     JSON.stringify({
       ok: true,
+      // Which commit is deployed — short SHA from Vercel, or "dev" locally/under test.
+      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev',
       providers: Object.keys(ADAPTERS),
       // Which relay backing store is live, and how many supporters are polling.
       queue: QUEUE_DISTRIBUTED ? 'upstash' : 'memory',
