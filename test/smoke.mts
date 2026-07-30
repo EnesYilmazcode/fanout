@@ -320,5 +320,13 @@ t('connect: a forced error returns a clean 500', connectErr.status === 500)
 t('connect: the error path keeps CORS', connectErr.headers.get('access-control-allow-origin') === '*')
 t('connect: the error path carries a {message,type} envelope', typeof connectErrJson.error?.message === 'string' && typeof connectErrJson.error?.type === 'string')
 
+console.log('\ndemo page — favicon, theme-color, and a11y polish')
+const { readFileSync } = await import('node:fs')
+const demoHtml = readFileSync(new URL('../public/demo.html', import.meta.url), 'utf8')
+t('demo references the shared /favicon.svg', demoHtml.includes('href="/favicon.svg"'))
+t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color" content="#0d0f12"'))
+t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
+t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

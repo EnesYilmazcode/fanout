@@ -11,7 +11,7 @@ import { route, ADAPTERS, type ChatRequest } from './providers'
 import { check, LIMITS, clientIp, IP_PROXY_LIMIT, type Verdict } from './ratelimit'
 import { submitJob, awaitResult, type Job } from './queue'
 
-export const CORS = {
+const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, content-type, x-fanout-connection',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -20,7 +20,7 @@ export const CORS = {
     'x-fanout-pool-size, x-fanout-pool-health, x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
 }
 
-export const preflight = () => new Response(null, { status: 204, headers: CORS })
+const preflight = () => new Response(null, { status: 204, headers: CORS })
 
 function err(status: number, message: string, type = 'invalid_request_error', extra: Record<string, string> = {}) {
   return new Response(JSON.stringify({ error: { message, type } }), {
@@ -87,7 +87,7 @@ export async function listModels(req: Request): Promise<Response> {
 // the request needs no connection blobs, because supporters' machines are the
 // capacity. Non-streaming in substance; stream:true gets the finished answer as
 // a single SSE chunk so OpenAI clients that always stream still work.
-export const RELAY_PROVIDER = 'claude-code'
+const RELAY_PROVIDER = 'claude-code'
 // Kept safely under Vercel Edge's ~25s initial-response deadline: the relay
 // buffers (emits nothing until the answer arrives), so if this exceeded the
 // platform limit a no-supporter timeout would surface as platform 504 HTML
