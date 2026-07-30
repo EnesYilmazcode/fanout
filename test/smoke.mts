@@ -331,6 +331,25 @@ t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color
 t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
 t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
+console.log('\nvercel.json — security and cache response headers')
+const vercelCfg = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+const allRoutes = (vercelCfg.headers ?? []).find((h: any) => h.source === '/(.*)')
+const headerVal = (rule: any, key: string) =>
+  (rule?.headers ?? []).find((x: any) => x.key.toLowerCase() === key.toLowerCase())?.value
+t('vercel: all-routes rule exists', !!allRoutes)
+t('vercel: X-Content-Type-Options nosniff', headerVal(allRoutes, 'X-Content-Type-Options') === 'nosniff')
+t('vercel: Referrer-Policy no-referrer', headerVal(allRoutes, 'Referrer-Policy') === 'no-referrer')
+t('vercel: X-Frame-Options DENY', headerVal(allRoutes, 'X-Frame-Options') === 'DENY')
+t('vercel: Permissions-Policy disables camera/mic/geo',
+  headerVal(allRoutes, 'Permissions-Policy') === 'camera=(), microphone=(), geolocation=()')
+t('vercel: no CSP header (pages use per-page meta)',
+  headerVal(allRoutes, 'Content-Security-Policy') === undefined)
+const assetRule = (vercelCfg.headers ?? []).find((h: any) =>
+  /app\.css/.test(h.source) && /app\.js/.test(h.source) && /favicon\.svg/.test(h.source))
+t('vercel: static asset cache rule exists', !!assetRule)
+t('vercel: static assets are immutable long-cache',
+  /immutable/.test(headerVal(assetRule, 'Cache-Control') ?? '') &&
+  /max-age=31536000/.test(headerVal(assetRule, 'Cache-Control') ?? ''))
 console.log('\nopenai adapter — OpenAI-shaped passthrough with a re-stamped model')
 // translateRequest spreads the caller's body and overwrites only the model
 // (the prefix is stripped upstream), preserving every other field verbatim.
