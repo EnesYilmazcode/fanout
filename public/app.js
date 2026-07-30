@@ -114,15 +114,16 @@ function renderStatus({ connected, online }) {
     ? `${plural(online, 'supporter', 'supporters')} online`
     : 'No supporters online right now'
 
-  // Supporter view: is *your* node connected, plus the community size.
-  $('status').classList.toggle('live', connected)
-  $('status-text').textContent = connected
-    ? 'Connected — your machine is answering requests.'
-    : 'Waiting for your node to connect…'
-  const others = Math.max(0, online - (connected ? 1 : 0))
-  $('support-online').textContent = others > 0
-    ? `${plural(others, 'other supporter', 'other supporters')} online too.`
-    : ' '
+  // Supporter view: the global count is the real signal. The one-liner flow has
+  // Claude mint its OWN key, so the per-key `connected` check usually will not
+  // fire for the browser. Lead with how many supporters are online instead.
+  $('status').classList.toggle('live', online > 0)
+  $('status-text').textContent = online > 0
+    ? `${plural(online, 'supporter', 'supporters')} online${connected ? ' (your node is one of them)' : ''}`
+    : 'No supporters online yet'
+  $('support-online').textContent = online > 0
+    ? ' '
+    : 'Give the line above to Claude Code to bring one online.'
 }
 
 async function pollStatus() {
