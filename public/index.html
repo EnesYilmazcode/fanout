@@ -11,6 +11,14 @@
       content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
 <title>Fanout</title>
 <meta name="description" content="One API key. Answers come from supporters running Claude Code." />
+<!-- Social share preview. Meta tags only — no scripts, no external hosts, so
+     the strict CSP above is untouched. The image is a same-origin file. -->
+<meta property="og:title" content="Fanout" />
+<meta property="og:description" content="One API key. Answers come from supporters running Claude Code." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="/og.png" />
 <!-- Favicon is a same-origin file, not a data: URI: the strict CSP sets
      img-src 'self' (no data:), so an inline data: icon would be blocked. -->
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
