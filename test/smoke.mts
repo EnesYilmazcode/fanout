@@ -482,7 +482,7 @@ t('README links to the architecture doc', readFileSync(new URL('../README.md', i
 console.log('\nsecurity policy — SECURITY.md exists and states scope and limits')
 const secDoc = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8')
 t('SECURITY.md exists and is non-trivial', secDoc.length > 500, `len=${secDoc.length}`)
-t('SECURITY.md explains private reporting', /report a vulnerability/i.test(secDoc) && /enesyilmaz5157@gmail\.com/.test(secDoc))
+t('SECURITY.md explains private reporting', /report a vulnerability/i.test(secDoc) && /private advisory/i.test(secDoc))
 t('SECURITY.md scopes HMAC key signing', /HMAC/.test(secDoc))
 t('SECURITY.md scopes AES-GCM sealed blobs', /AES-256-GCM/.test(secDoc) && /additional authenticated data/i.test(secDoc))
 t('SECURITY.md scopes the supporter relay', /supporter relay/i.test(secDoc) && /claude-code/.test(secDoc))
