@@ -14,6 +14,9 @@ export const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, content-type, x-fanout-connection',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-expose-headers':
+    'x-fanout-provider, x-fanout-connection-label, x-fanout-attempt, x-fanout-attempts, ' +
+    'x-fanout-pool-size, x-fanout-pool-health, x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
 }
 
 export const preflight = () => new Response(null, { status: 204, headers: CORS })
@@ -128,6 +131,12 @@ export async function chatCompletions(req: Request): Promise<Response> {
   let lastStatus = 502
   let lastText = JSON.stringify({ error: { message: 'All upstream connections failed.', type: 'api_error' } })
 
+  // Per-attempt outcomes, in the order tried: "label:ok", "label:429",
+  // "label:unreachable". Callers debugging a half-dead pool need to see which
+  // connections failed, not just which one finally answered.
+  const health: string[] = []
+  const poolHealth = () => ({ 'x-fanout-pool-health': health.join(', ') })
+
   for (let i = 0; i < conns.length; i++) {
     const conn = conns[(start + i) % conns.length]
 
@@ -141,26 +150,30 @@ export async function chatCompletions(req: Request): Promise<Response> {
     } catch {
       lastStatus = 502
       lastText = JSON.stringify({ error: { message: `Could not reach ${adapter.id}.`, type: 'api_error' } })
+      health.push(`${conn.label ?? 'unnamed'}:unreachable`)
       continue
     }
 
     if (!upstream.ok) {
       lastStatus = upstream.status
       lastText = await upstream.text().catch(() => '{"error":{"message":"Upstream error."}}')
+      health.push(`${conn.label ?? 'unnamed'}:${upstream.status}`)
       if (shouldFailover(upstream.status) && i < conns.length - 1) continue
       // Non-retryable (a malformed request, say) — surface it verbatim so the
       // caller sees the provider's own explanation.
       return new Response(lastText, {
         status: upstream.status,
-        headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(i + 1) },
+        headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(i + 1), ...poolHealth() },
       })
     }
 
+    health.push(`${conn.label ?? 'unnamed'}:ok`)
     const served = {
       'x-fanout-provider': adapter.id,
       'x-fanout-connection-label': conn.label ?? 'unnamed',
       'x-fanout-attempt': String(i + 1),
       'x-fanout-pool-size': String(conns.length),
+      ...poolHealth(),
     }
 
     if (body.stream && upstream.body) {
@@ -183,6 +196,6 @@ export async function chatCompletions(req: Request): Promise<Response> {
 
   return new Response(lastText, {
     status: lastStatus,
-    headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(conns.length) },
+    headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(conns.length), ...poolHealth() },
   })
 }

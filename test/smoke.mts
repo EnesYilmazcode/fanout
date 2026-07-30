@@ -109,5 +109,42 @@ const dirty = 'ok\r\nX-Injected: yes'
 const cleaned = dirty.replace(/[^\x20-\x7E]/g, '').slice(0, 40)
 t('control characters strip out of a label', !/[\r\n]/.test(cleaned), JSON.stringify(cleaned))
 
+console.log('\npool health — failover surfaces per-connection outcomes')
+const { chatCompletions } = await import('../lib/gateway.ts')
+const healthKey = await issueKey('health_user', 'free')
+const connA = await seal({ provider: 'anthropic', apiKey: 'sk-ant-aaaaaaaa', owner: 'health_user', createdAt: Date.now(), label: 'first' })
+const connB = await seal({ provider: 'anthropic', apiKey: 'sk-ant-bbbbbbbb', owner: 'health_user', createdAt: Date.now(), label: 'second' })
+
+// Whichever connection the random start offset picks first gets a 429; the
+// retry succeeds. The health header must show both outcomes in walk order.
+const realFetch = globalThis.fetch
+let upstreamCalls = 0
+globalThis.fetch = (async () => {
+  upstreamCalls++
+  if (upstreamCalls === 1) return new Response('{"error":{"message":"overloaded"}}', { status: 429 })
+  return new Response(
+    JSON.stringify({ id: 'msg_h', content: [{ type: 'text', text: 'pong' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  )
+}) as typeof fetch
+
+const healthRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    authorization: `Bearer ${healthKey}`,
+    'x-fanout-connection': `${connA},${connB}`,
+  },
+  body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'ping' }] }),
+}))
+globalThis.fetch = realFetch
+
+const ph = healthRes.headers.get('x-fanout-pool-health') ?? ''
+t('request succeeds after failover', healthRes.status === 200, `status=${healthRes.status}`)
+t('pool health lists the failed connection', ph.includes(':429'), ph)
+t('pool health lists the winner last', ph.endsWith(':ok'), ph)
+t('attempt count matches the walk', healthRes.headers.get('x-fanout-attempt') === '2')
+t('pool health is exposed to browsers', (healthRes.headers.get('access-control-expose-headers') ?? '').includes('x-fanout-pool-health'))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
