@@ -3,7 +3,14 @@ import { QUEUE_DISTRIBUTED, countLive } from '../lib/queue'
 
 export const config = { runtime: 'edge' }
 
-export default async function handler(): Promise<Response> {
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-allow-methods': 'GET, OPTIONS',
+}
+
+export default async function handler(req?: Request): Promise<Response> {
+  if (req?.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   return new Response(
     JSON.stringify({
       ok: true,
@@ -17,6 +24,6 @@ export default async function handler(): Promise<Response> {
         master_encryption_key: Boolean(process.env.MASTER_ENCRYPTION_KEY),
       },
     }),
-    { headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } },
+    { headers: { 'content-type': 'application/json', ...CORS } },
   )
 }
