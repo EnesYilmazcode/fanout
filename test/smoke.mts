@@ -433,5 +433,16 @@ t('index points twitter:image at /og.png', indexHtml.includes('name="twitter:ima
 t('the og.png share image exists', existsSync(new URL('../public/og.png', import.meta.url)))
 t('share preview adds no inline script (CSP intact)', !/<script[^>]*>[^<]/.test(indexHtml))
 
+console.log('\narchitecture doc — exists and covers the four core pieces')
+const archDoc = readFileSync(new URL('../docs/ARCHITECTURE.md', import.meta.url), 'utf8')
+t('ARCHITECTURE.md exists and is non-trivial', archDoc.length > 500, `len=${archDoc.length}`)
+t('ARCHITECTURE.md covers the stateless HMAC key', /HMAC/.test(archDoc) && /no user table/i.test(archDoc))
+t('ARCHITECTURE.md covers the owner-bound AES-GCM seal', /AES-256-GCM/.test(archDoc) && /additional authenticated data/i.test(archDoc))
+t('ARCHITECTURE.md covers the pooling proxy failover', /failover/i.test(archDoc) && /pool/i.test(archDoc))
+t('ARCHITECTURE.md covers the supporter relay queue and worker', /claude-code/.test(archDoc) && /queue/i.test(archDoc) && /worker/i.test(archDoc))
+t('ARCHITECTURE.md has a mermaid diagram', archDoc.includes('```mermaid'))
+t('ARCHITECTURE.md uses no em dashes', !archDoc.includes('—'))
+t('README links to the architecture doc', readFileSync(new URL('../README.md', import.meta.url), 'utf8').includes('docs/ARCHITECTURE.md'))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
