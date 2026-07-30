@@ -67,6 +67,8 @@ Two ideas keep it simple:
 - Your Fanout key is a signed token. Checking it is one hash, so there is no user table and no lookup.
 - Your provider key is sealed into an encrypted blob that only your key can open. Fanout keeps no copy, so there is nothing on the server to leak.
 
+For a fuller tour of the design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Endpoints
 
 | Method | Path | What it does |

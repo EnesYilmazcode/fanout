@@ -29,6 +29,40 @@ t('a tampered signature is rejected', (await verifyKey(key.slice(0, -3) + 'xxx')
 t('a forged key is rejected', (await verifyKey('fo_live_nope.nope')) === null)
 t('a missing key is rejected', (await verifyKey(null)) === null)
 
+// tier and user id survive a verify round trip (free is covered above; prove 'pro' too).
+const proKey = await issueKey('enes_pro', 'pro')
+const proPayload = await verifyKey(proKey)
+t('a pro key preserves tier and user id through verify', proPayload?.u === 'enes_pro' && proPayload?.t === 'pro')
+
+// payload swap: pair one key's body with another key's signature. The HMAC is over
+// the body, so the mismatched signature must fail — you cannot lift a signature onto
+// a different (e.g. tier-escalated) payload.
+const freeBody = key.slice('fo_live_'.length).split('.')[0]
+const proSig = proKey.slice('fo_live_'.length).split('.')[1]
+t('a payload-swapped key is rejected', (await verifyKey(`fo_live_${freeBody}.${proSig}`)) === null)
+
+// junk bearer strings must fall through cleanly, never throw.
+t('an empty string is rejected', (await verifyKey('')) === null)
+t('a bearer without the fo_live_ prefix is rejected', (await verifyKey('Bearer abc.def')) === null)
+t('a prefixed key with no dot separator is rejected', (await verifyKey('fo_live_onlybody')) === null)
+
+// expiry IS enforced (lib/auth.ts checks payload.e < now), so an expired but validly
+// signed key must be rejected. Sign one directly with the same MASTER_SECRET to isolate
+// expiry as the sole reason for rejection.
+const { jsonToB64u, bytesToB64u } = await import('../lib/b64.ts')
+const signPayload = async (p: unknown): Promise<string> => {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(process.env.MASTER_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const body = jsonToB64u(p)
+  const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(body))
+  return `fo_live_${body}.${bytesToB64u(new Uint8Array(sig))}`
+}
+const nowSec = Math.floor(Date.now() / 1000)
+const expiredKey = await signPayload({ u: 'expired_user', t: 'free', v: 1, i: nowSec - 10_000, e: nowSec - 100 })
+t('an expired key is rejected (expiry is enforced)', (await verifyKey(expiredKey)) === null)
+// control: the same signer with a future expiry verifies, proving only expiry rejected it.
+const freshSigned = await signPayload({ u: 'expired_user', t: 'free', v: 1, i: nowSec - 10_000, e: nowSec + 10_000 })
+t('the same signed payload verifies when not expired', (await verifyKey(freshSigned))?.u === 'expired_user')
+
 console.log('\nseal — credentials are bound to their owner')
 const conn = { provider: 'anthropic', apiKey: 'sk-ant-secret', owner: 'enes_abc123', createdAt: Date.now(), label: 'mine' }
 const blob = await seal(conn)
@@ -433,6 +467,17 @@ t('index sets twitter:card summary_large_image', indexHtml.includes('name="twitt
 t('index points twitter:image at /og.png', indexHtml.includes('name="twitter:image" content="/og.png"'))
 t('the og.png share image exists', existsSync(new URL('../public/og.png', import.meta.url)))
 t('share preview adds no inline script (CSP intact)', !/<script[^>]*>[^<]/.test(indexHtml))
+
+console.log('\narchitecture doc — exists and covers the four core pieces')
+const archDoc = readFileSync(new URL('../docs/ARCHITECTURE.md', import.meta.url), 'utf8')
+t('ARCHITECTURE.md exists and is non-trivial', archDoc.length > 500, `len=${archDoc.length}`)
+t('ARCHITECTURE.md covers the stateless HMAC key', /HMAC/.test(archDoc) && /no user table/i.test(archDoc))
+t('ARCHITECTURE.md covers the owner-bound AES-GCM seal', /AES-256-GCM/.test(archDoc) && /additional authenticated data/i.test(archDoc))
+t('ARCHITECTURE.md covers the pooling proxy failover', /failover/i.test(archDoc) && /pool/i.test(archDoc))
+t('ARCHITECTURE.md covers the supporter relay queue and worker', /claude-code/.test(archDoc) && /queue/i.test(archDoc) && /worker/i.test(archDoc))
+t('ARCHITECTURE.md has a mermaid diagram', archDoc.includes('```mermaid'))
+t('ARCHITECTURE.md uses no em dashes', !archDoc.includes('—'))
+t('README links to the architecture doc', readFileSync(new URL('../README.md', import.meta.url), 'utf8').includes('docs/ARCHITECTURE.md'))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
