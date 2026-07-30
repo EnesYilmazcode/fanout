@@ -1,0 +1,42 @@
+// Is a supporter node live for this key right now?
+//
+// The homepage polls this in supporter mode so it can light up "connected" the
+// moment the pasted worker loop starts hitting /api/work/next. Presence is keyed
+// by the Fanout user id in the bearer key, so a caller only ever sees the status
+// of its own node — no cross-user visibility.
+
+import { verifyKey, bearer } from '../../lib/auth'
+import { isLive, countLive } from '../../lib/queue'
+import { check, clientIp } from '../../lib/ratelimit'
+
+export const config = { runtime: 'edge' }
+
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-allow-methods': 'GET, OPTIONS',
+}
+
+// The page polls every few seconds; keep a generous ceiling so a background tab
+// that fell behind isn't locked out, but still bounded.
+const IP_STATUS_LIMIT = 60
+
+function json(status: number, obj: unknown) {
+  return new Response(JSON.stringify(obj), {
+    status, headers: { 'content-type': 'application/json', ...CORS },
+  })
+}
+
+export default async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+  if (req.method !== 'GET') return json(405, { error: { message: 'Use GET.' } })
+
+  const auth = await verifyKey(bearer(req))
+  if (!auth) return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
+  if (!check(`status:${clientIp(req)}`, IP_STATUS_LIMIT).ok) {
+    return json(429, { error: { message: 'Polling status too fast.', type: 'rate_limit_error' } })
+  }
+
+  const [connected, online] = await Promise.all([isLive(auth.u), countLive()])
+  return json(200, { connected, online })
+}

@@ -109,5 +109,128 @@ const dirty = 'ok\r\nX-Injected: yes'
 const cleaned = dirty.replace(/[^\x20-\x7E]/g, '').slice(0, 40)
 t('control characters strip out of a label', !/[\r\n]/.test(cleaned), JSON.stringify(cleaned))
 
+console.log('\npool health — failover surfaces per-connection outcomes')
+const { chatCompletions } = await import('../lib/gateway.ts')
+const healthKey = await issueKey('health_user', 'free')
+const connA = await seal({ provider: 'anthropic', apiKey: 'sk-ant-aaaaaaaa', owner: 'health_user', createdAt: Date.now(), label: 'first' })
+const connB = await seal({ provider: 'anthropic', apiKey: 'sk-ant-bbbbbbbb', owner: 'health_user', createdAt: Date.now(), label: 'second' })
+
+// Whichever connection the random start offset picks first gets a 429; the
+// retry succeeds. The health header must show both outcomes in walk order.
+const realFetch = globalThis.fetch
+let upstreamCalls = 0
+globalThis.fetch = (async () => {
+  upstreamCalls++
+  if (upstreamCalls === 1) return new Response('{"error":{"message":"overloaded"}}', { status: 429 })
+  return new Response(
+    JSON.stringify({ id: 'msg_h', content: [{ type: 'text', text: 'pong' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  )
+}) as typeof fetch
+
+const healthRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    authorization: `Bearer ${healthKey}`,
+    'x-fanout-connection': `${connA},${connB}`,
+  },
+  body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'ping' }] }),
+}))
+globalThis.fetch = realFetch
+
+const ph = healthRes.headers.get('x-fanout-pool-health') ?? ''
+t('request succeeds after failover', healthRes.status === 200, `status=${healthRes.status}`)
+t('pool health lists the failed connection', ph.includes(':429'), ph)
+t('pool health lists the winner last', ph.endsWith(':ok'), ph)
+t('attempt count matches the walk', healthRes.headers.get('x-fanout-attempt') === '2')
+t('pool health is exposed to browsers', (healthRes.headers.get('access-control-expose-headers') ?? '').includes('x-fanout-pool-health'))
+
+console.log('\nsupporter relay — claude-code jobs round-trip through the queue')
+const workNext = (await import('../api/work/next.ts')).default
+const workComplete = (await import('../api/work/complete.ts')).default
+const userKey = await issueKey('relay_user', 'free')
+const supporterKey = await issueKey('supporter_1', 'free')
+
+const relayReq = (body: unknown) => new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${userKey}` },
+  body: JSON.stringify(body),
+})
+
+// A supporter cycle, exactly as the pasted worker brief describes it: poll,
+// answer the last message, deliver. Runs concurrently with the user's request.
+const supporterCycle = async () => {
+  const polled = await workNext(new Request('https://x/api/work/next', {
+    method: 'POST', headers: { authorization: `Bearer ${supporterKey}` },
+  }))
+  if (polled.status !== 200) return { polled: polled.status, job: null as any, delivered: 0 }
+  const job = await polled.json()
+  const delivered = await workComplete(new Request('https://x/api/work/complete', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${supporterKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ id: job.id, text: `echo:${job.messages.at(-1).content}` }),
+  }))
+  return { polled: polled.status, job, delivered: delivered.status }
+}
+
+t('polling without a key is rejected', (await workNext(new Request('https://x/', { method: 'POST' }))).status === 401)
+
+// Malformed relay inputs must fail cleanly (400), never throw a bare 500.
+const nullMsg = await chatCompletions(relayReq({ model: 'claude-code', messages: [null] }))
+t('a null message element is a clean 400', nullMsg.status === 400 && nullMsg.headers.get('access-control-allow-origin') === '*')
+const imgOnly = await chatCompletions(relayReq({ model: 'claude-code', messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:x' } }] }] }))
+const imgJson = await imgOnly.json()
+t('a text-less prompt is rejected, not blank-relayed', imgOnly.status === 400 && /no text content/i.test(imgJson.error.message))
+
+const cycle = supporterCycle()
+const relayRes = await chatCompletions(relayReq({ model: 'claude-code', messages: [{ role: 'user', content: 'ping-relay' }] }))
+const side = await cycle
+const relayJson = await relayRes.json()
+
+t('supporter received a job', side.polled === 200 && side.job?.id?.length === 36)
+t('job carries no requester identity', !JSON.stringify(side.job).includes('relay_user'))
+t('delivery is accepted', side.delivered === 200)
+t('user gets the supporter answer', relayRes.status === 200 && relayJson.choices?.[0]?.message?.content === 'echo:ping-relay', JSON.stringify(relayJson.choices?.[0] ?? relayJson))
+t('relay response is OpenAI-shaped', relayJson.object === 'chat.completion' && relayJson.choices[0].finish_reason === 'stop')
+t('provider header names the relay', relayRes.headers.get('x-fanout-provider') === 'claude-code')
+
+const cycle2 = supporterCycle()
+const streamRes = await chatCompletions(relayReq({ model: 'claude-code/default', stream: true, messages: [{ role: 'user', content: 'ping-sse' }] }))
+await cycle2
+const sseText = await streamRes.text()
+t('stream:true yields SSE with the answer', sseText.includes('echo:ping-sse') && sseText.trimEnd().endsWith('data: [DONE]'))
+
+console.log('\nsupporter presence — the site can tell when a node is live')
+const workStatus = (await import('../api/work/status.ts')).default
+const statusReq = (key: string) => new Request('https://x/api/work/status', { headers: { authorization: `Bearer ${key}` } })
+const presenceUser = await issueKey('presence_user', 'free')
+
+const before = await (await workStatus(statusReq(presenceUser))).json()
+t('a node that never polled reads offline', before.connected === false)
+
+// A poll marks the node live before it even returns work. Give it a job to pop
+// so the long-poll returns immediately instead of holding the full window.
+const { submitJob } = await import('../lib/queue.ts')
+await submitJob('claude-code', [{ role: 'user', content: 'warm' }])
+await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${presenceUser}` } }))
+const after = await (await workStatus(statusReq(presenceUser))).json()
+t('polling marks the node connected', after.connected === true)
+
+// Presence is scoped to the key — a different user never sees this node.
+const otherKey = await issueKey('someone_else', 'free')
+const other = await (await workStatus(statusReq(otherKey))).json()
+t('presence does not leak across keys', other.connected === false)
+t('status needs a key', (await workStatus(new Request('https://x/api/work/status'))).status === 401)
+
+// Global count: presenceUser polled above, so at least one node is live and the
+// count is visible to any key, including one whose own node is offline.
+t('status reports a global online count', typeof other.online === 'number' && other.online >= 1)
+const { countLive } = await import('../lib/queue.ts')
+const baseline = await countLive()
+await submitJob('claude-code', [{ role: 'user', content: 'warm2' }])
+await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${otherKey}` } }))
+t('a second live node raises the count', (await countLive()) >= baseline + 1)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

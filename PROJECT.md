@@ -3,9 +3,9 @@
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
 
-**Status:** deployed and verified live — but see the open question on the sharing model
+**Status:** deployed and verified live — sharing-model question resolved, see Decision log
 **Live URL:** https://fanout-tawny.vercel.app
-**Last updated:** 2026-07-28
+**Last updated:** 2026-07-30
 
 ---
 
@@ -30,50 +30,57 @@ stale relative to the code. Newest entries at the top of each log.
 | 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
 | 14 | Adversarial security review of the live deployment | — |
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
+| 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
+| 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
+| 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
+| 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
+| 20 | Supporter presence — node heartbeat + `/api/work/status`, live "connected" light | `feat(relay)` |
+| 21 | Live "N supporters online" count on both views (global presence) | `feat(relay)` |
+| 22 | Relay hardening — 7 findings from adversarial review fixed | `fix(relay)` |
+| 23 | CI (GitHub Actions runs `npm run check`) + `CLAUDE.md` working notes | `chore` |
 
-### ⚠️ Open: the sharing model is wrong for the intended product
+### Resolved: Fanout is a personal capacity router
 
-**Parked 2026-07-28, needs a decision before further building.**
+The parked P0 — personal router or marketplace — was put to a five-perspective design review
+on 2026-07-30 (full report: `docs/design/2026-07-30-dashboard-panel.md`). The verdict was
+unanimous: **personal capacity router.** Both supporter mechanisms are dead as proposed:
 
-What exists is a *personal* key router: you pool **your own** keys and fail over between them.
+- **Key deposit (marketplace):** *killed*, not deferred. The target seller (Claude Max, Cursor,
+  Copilot) has no API key to deposit — those products auth over OAuth and prohibit credential
+  sharing; a console key is pay-per-token, so depositing one is donating money at cost; and
+  serving a stranger's key requires deleting the AAD owner-binding, converting
+  `MASTER_ENCRYPTION_KEY` into a vault of other people's credentials.
+- **Claude Code worker relay:** the machinery is real (headless `claude -p`, long-lived OAuth
+  tokens, a small polling loop) but subscription auth is licensed for the holder's own use and
+  Anthropic explicitly enforces against it in third-party services — every supporter node would
+  risk a ban. It also cannot fit Vercel Hobby function lifetimes or Upstash's free tier.
+  Salvage: **self-relay** — your own idle machine serving your own pool — as a future mode of
+  the npm package.
 
-What Fanout is meant to be is a *two-sided marketplace*: people with spare AI capacity deposit
-keys, people who want cheap access consume them. Sellers and buyers are different people.
+What replaces "supporters": sharing with people you know goes through the provider, not through
+Fanout — invite them into your Anthropic/OpenAI organization so they hold their own key and seal
+their own blob. That is the one sharing mechanism provider terms are built to permit.
 
-These are opposite designs, and the current one structurally blocks the intended one. Connection
-blobs are bound to their owner as AES-GCM additional data, so a buyer **cannot** use a seller's
-key — decryption fails by design. That property was deliberately built and then hardened in the
-security review; it is exactly the property a marketplace must not have.
+### Future products (explicitly separate, each with its real cost)
 
-Rebuilding as a marketplace requires:
+Not features of this codebase. If either is ever pursued, it is a new commitment:
 
-| Piece | Note |
-|---|---|
-| Shared server-side key pool | Sellers' keys must be usable by strangers — the owner binding comes out |
-| Buyer → arbitrary seller routing | Does not exist |
-| Per-seller usage accounting | Needed to pay anyone; does not exist |
-| **A datastore** | Unavoidable. The no-database property (see Decision log) cannot survive this |
-
-Upstash Redis on Vercel's free tier is the intended landing spot.
-
-**Also unresolved — a premise problem worth settling before the pitch.** The seller story is
-"monetize your idle coding subscription", but Claude Max, Cursor, and Copilot subscriptions do not
-issue API keys: they authenticate over OAuth, are seat-licensed to one person, and reselling access
-violates their terms. What can actually be deposited is a console API key, which is pay-per-token —
-so there is no idle headroom to sell, only resale at cost. The demo works either way; the pitch does
-not survive contact with someone who knows this. Decide whether to reframe.
+- **Donation credit pool** ("Patreon for inference") — legally clean; requires commercial
+  hosting (Vercel Pro), a datastore for accounting, per-user caps, and an abuse pipeline.
+- **Open-model volunteer network** ("BOINC for open weights") — supporters host Ollama/vLLM;
+  fixes licensing entirely, but needs a persistent broker, paid hosting, and a disclosed
+  plaintext trust model. Effectively a re-platforming that reuses the adapter pattern.
 
 ### Next
 
 | Priority | Item | Why |
 |---|---|---|
-| P0 | **Decide: personal router or marketplace** | Everything below depends on it; see above |
-| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet |
-| P1 | Publish an npm package for the seller side | Depositing a key is awkward as raw curl. Buyers need nothing — the OpenAI SDK already works |
-| P2 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
-| P1 | `X-Fanout-Pool-Health` response header | Surface which connections failed, not just which one won |
-| P2 | Retry budget per request | One bad pool of 20 blobs currently costs 20 upstream calls |
+| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet. Must land before promoting the setup page |
+| P1 | GitHub OAuth key recovery | Deterministic re-mint from `HMAC(master_secret, github_id)` — additive, never a gate, zero storage. Covers the lost-key-orphans-blobs failure the setup page's backup button only mitigates |
+| P1 | npm client package | Mint/seal/compose-config from the terminal, mirroring the setup page. Design so a self-relay mode can be added later |
+| P2 | Retry budget per request | One bad pool of 8 blobs currently costs 8 upstream calls |
 | P2 | Token usage in streaming responses | Anthropic sends `message_delta.usage`; currently dropped |
+| P2 | Record the demo clip for the post | Failover across your own providers — show two keys, kill one |
 
 ### Icebox
 
@@ -91,6 +98,16 @@ project — revisit only if this stops being a demo.
 ## Decision log
 
 Why things are the way they are, so a future change doesn't quietly undo a deliberate choice.
+
+**2026-07-30 · Personal capacity router, not a marketplace.**
+Settled by a five-perspective design review (`docs/design/2026-07-30-dashboard-panel.md`).
+The marketplace lost independently on four grounds — terms (credential sharing and subscription
+relay are both prohibited by every relevant provider), economics (nothing depositable has idle
+headroom), security (it requires deleting the AAD owner-binding), and infrastructure (relay
+cannot fit Vercel Hobby or Upstash free tiers). Any one would have sufficed. The AAD
+owner-binding stays. The "dashboard" shipped as a static no-login setup page for the same
+reason: minting is unauthenticated, so a login would gate nothing; identity arrives later, if
+ever, as optional OAuth key *recovery*, not as a gate.
 
 **2026-07-28 · No database, by construction.**
 Vercel's free tier has no first-party datastore, and the two things a datastore would buy
@@ -168,6 +185,81 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (review hardening + online count)
+
+- **Live "N supporters online" count** on both the use view (so a caller knows `claude-code` will
+  be answered) and the supporter view, backed by a global presence count in the queue (Redis
+  sorted set / in-memory map). Status endpoint now returns `{connected, online}`.
+- **Adversarial review of the relay, 7 confirmed findings fixed** (full run archived under the
+  session; verified against source before fixing):
+  1. Uncaught exceptions in the relay path returned a bare Edge 500 with no CORS/OpenAI envelope
+     → whole handler wrapped, queue errors become a clean 502, null/again message elements coerced.
+  2. `flatten()` silently relayed an empty prompt for text-less content → rejected with 400.
+  3–4. 25s relay wait raced Vercel Edge's ~25s deadline (platform 504 HTML) and 504'd healthy
+     relays → `RELAY_WAIT_MS` cut to 20s, safely under the deadline, returns our own clean 504.
+  5. In-memory job queue grew unbounded with no supporter polling → age-trim + `MAX_QUEUE` cap
+     on push (both stores).
+  6. Memory results map leaked → opportunistic sweep.
+  7. Upstash busy-poll (~100k commands/day per idle supporter) → **BRPOP** blocking pop (one
+     command per poll window) and one-command presence heartbeat. ~25× cheaper.
+- **CI**: `.github/workflows/ci.yml` runs `npm run check` on every push to main and every PR —
+  the gate for the overnight autonomous improvement loop. Added `CLAUDE.md` working notes.
+- Smoke suite now 50 assertions (relay guards, presence, global count).
+
+### 2026-07-30 (supporter presence)
+
+- **Live connection detection.** Each `/api/work/next` poll now heartbeats the node (keyed by
+  Fanout user id, ~45s TTL); new `GET /api/work/status` reports whether the caller's own node is
+  live. The supporter view polls it every 3s and flips from "Waiting for your node to connect…"
+  to a green "Connected — your machine is answering requests" the moment the pasted worker loop
+  starts. Polling stops when the view is left. Presence is per-key — no cross-user visibility.
+  Four new smoke assertions (39 total) plus browser coverage of the offline→online transition.
+- Supporter brief reworded to "Paste this into Claude Code or Codex."
+
+### 2026-07-30 (relay + centered homepage)
+
+- **Supporter relay built.** New `claude-code` model routes through a work queue instead of a
+  provider: `lib/queue.ts` (Upstash REST when configured, per-instance memory otherwise) plus
+  `POST /api/work/next` (supporter long-poll) and `POST /api/work/complete` (deliver). A user's
+  `claude-code` request submits a job and waits up to 25s for a supporter's answer, returned
+  OpenAI-shaped (streaming supported as a single chunk). Jobs carry only model + flattened
+  messages — no requester id or IP; the job UUID is the completion capability. Eight new smoke
+  assertions cover the full round-trip (35 total).
+- **Homepage rebuilt to the centered two-mode spec**: title centered, a single key box with
+  regenerate on the left and a copy icon on the right, and a top-right toggle to the supporter
+  view, which shows a copy-paste worker brief for Claude Code embedding the user's key. The
+  bring-your-own-keys UI stays at `/demo.html`. Verified in-browser under the CSP, 14 checks.
+
+  Design-note carried forward for honesty: the relay is a plaintext trust relationship
+  (supporters read prompts, users read answers), and running the worker on a Claude subscription
+  is the supporter's own ToS risk, disclosed where the worker starts. The earlier review killed
+  the relay *as an anonymous marketplace*; this is the founder's explicit direction to ship it
+  as a free, opt-in supporter network. The AAD owner-binding on provider connections is
+  untouched — the relay is a separate path that needs no blobs.
+
+### 2026-07-30 (later)
+
+- **Homepage redesigned to founder's spec**: light mode, minimal, key-first. The page now IS
+  the product surface — a key auto-mints on first visit, with Copy and Regenerate, a compact
+  provider row (kept because a Fanout key routes nothing without at least one sealed provider
+  key), the copyable config block doubling as the API docs, and backup/restore as footer
+  links. Regenerate warns and clears sealed providers, since blobs only decrypt under the key
+  that made them. The old dark landing/demo moved to `/demo.html`. Same strict CSP; verified
+  in-browser under it, 13 checks.
+
+### 2026-07-30
+
+- **Sharing-model P0 resolved: personal capacity router.** Five-perspective design review;
+  full report committed to `docs/design/2026-07-30-dashboard-panel.md`. Marketplace framing
+  removed from the board, the landing page, and the package description; future products
+  (donation pool, open-model volunteer network) recorded separately with their real costs.
+- **Setup page shipped** at `/setup.html` — mint, seal, and one copyable config block
+  (env / curl / Python / JS), localStorage-backed with download/restore backup, strict CSP,
+  no login and no backend changes. Verified in a real browser under the CSP: 12 checks.
+- **`X-Fanout-Pool-Health` response header** — every attempt's outcome in walk order
+  (`work:429, personal:ok`) on success and failure paths. Fanout's custom headers are now
+  CORS-exposed so cross-origin callers can read them. Five new smoke assertions (27 total).
 
 ### 2026-07-29
 

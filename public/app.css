@@ -1,0 +1,80 @@
+/* One centered column, light, nothing decorative. In a file because the CSP
+   forbids inline styles. */
+:root {
+  --ink: #18181b; --dim: #71717a; --line: #e4e4e7; --bg: #ffffff; --well: #fafafa;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#mode-switch {
+  position: fixed; top: 20px; right: 24px;
+  padding: 7px 14px; font-size: 13px; font-weight: 550; cursor: pointer;
+  background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 999px;
+}
+#mode-switch:hover { color: var(--ink); border-color: var(--dim); }
+
+main {
+  max-width: 640px; margin: 0 auto; padding: 26vh 24px 64px;
+  text-align: center;
+}
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 28px; }
+
+.keyrow { display: flex; align-items: stretch; gap: 8px; }
+.keyrow code {
+  flex: 1; min-width: 0; display: flex; align-items: center;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--well);
+  padding: 12px 16px; font-family: var(--mono); font-size: 13.5px;
+  overflow-x: auto; white-space: nowrap;
+}
+button.icon {
+  flex: 0 0 auto; width: 44px; cursor: pointer; border-radius: 9px;
+  background: transparent; color: var(--dim); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+}
+button.icon:hover { color: var(--ink); border-color: var(--dim); }
+button.icon.done { color: #15803d; border-color: #15803d; }
+button.icon svg { width: 17px; height: 17px; }
+button.icon:disabled { opacity: 0.4; cursor: default; }
+
+.hint { font-size: 13px; color: var(--dim); margin: 14px 0 0; }
+.hint code, .lead code {
+  font-family: var(--mono); font-size: 12px; background: var(--well);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+
+.lead { font-size: 15px; margin: 0 0 14px; }
+#worker {
+  margin: 0; padding: 16px 18px; text-align: left;
+  background: var(--well); border: 1px solid var(--line); border-radius: 9px;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word;
+}
+#btn-copy-worker {
+  margin-top: 12px; padding: 8px 18px; font-size: 13.5px; font-weight: 550; cursor: pointer;
+  background: var(--ink); color: #fff; border: 1px solid var(--ink); border-radius: 7px;
+}
+#btn-copy-worker:hover { opacity: 0.85; }
+
+.status {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 20px;
+  font-size: 13.5px; color: var(--dim);
+}
+.dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--line);
+  border: 1px solid #d4d4d8; flex: 0 0 auto;
+}
+.status.live { color: #15803d; }
+.status.live .dot { background: #22c55e; border-color: #16a34a; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } }
+
+footer {
+  margin-top: 64px; display: flex; gap: 18px; justify-content: center; font-size: 13px;
+}
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--ink); text-decoration: underline; }
