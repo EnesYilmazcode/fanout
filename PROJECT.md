@@ -50,6 +50,10 @@ stale relative to the code. Newest entries at the top of each log.
 | 33 | README polish + supporter walkthrough | `docs` (#23) |
 | 34 | Demo page favicon + theme-color + a11y parity | `feat(web)` (#24) |
 | 35 | OPTIONS/CORS preflight on `/api/health` | `feat` (#25) |
+| 36 | Security + cache headers via `vercel.json` | `feat` (#30) |
+| 37 | Social share preview (OG/Twitter) on the homepage | `feat(web)` (#31) |
+| 38 | Smoke coverage for the OpenAI and Groq adapters | `test` (#32) |
+| 39 | Request body size cap on the proxy path | `fix` (#33) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -197,6 +201,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (overnight — third fleet)
+
+- **Third parallel fleet** (issues #26-#29, PRs #30-#33): `vercel.json` with security headers
+  (nosniff, no-referrer, DENY framing, locked-down Permissions-Policy) and immutable caching for
+  static assets; an Open Graph / Twitter share preview with a served `/og.png`; real smoke
+  coverage for the OpenAI and Groq adapters; and a request body size cap on the proxy path so an
+  oversized payload is rejected with a clean 400 before any upstream call.
 
 ### 2026-07-30 (overnight — end-to-end test + second fleet)
 
