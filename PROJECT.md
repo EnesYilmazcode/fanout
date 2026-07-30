@@ -38,6 +38,12 @@ stale relative to the code. Newest entries at the top of each log.
 | 21 | Live "N supporters online" count on both views (global presence) | `feat(relay)` |
 | 22 | Relay hardening — 7 findings from adversarial review fixed | `fix(relay)` |
 | 23 | CI (GitHub Actions runs `npm run check`) + `CLAUDE.md` working notes | `chore` |
+| 24 | Human README with screenshot and diagram | `docs` (#8) |
+| 25 | Demo page wording cleanup | `#9` |
+| 26 | Homepage a11y + favicon + theme-color | `feat(web)` (#10) |
+| 27 | Token usage in streaming responses | `feat(providers)` (#11) |
+| 28 | `/api/health` reports queue backend + supporters online | `feat` (#12) |
+| 29 | Rate-limit headers on `/api/work/*` | `feat(relay)` (#13) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -185,6 +191,24 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (parallel fleet — six PRs)
+
+Worked as parallel teams: six issues (#2-#7) opened at once, each implemented on its own
+branch by an isolated agent, reviewed by a separate agent, and merged as PRs #8-#13.
+
+- #8 README rewritten to be plain and human (no em dashes), with a homepage screenshot and a
+  Mermaid flow diagram.
+- #9 removed the stale "crowdsourced" example from the demo page.
+- #10 homepage accessibility and mobile polish: theme-color, an SVG favicon that respects the
+  strict CSP, focus-visible rings, aria labels, and aria-live on the copy feedback.
+- #11 streaming responses can now emit a trailing OpenAI-shaped `usage` chunk, gated on
+  `stream_options.include_usage`.
+- #12 `/api/health` now reports the queue backend (`upstash` or `memory`) and `supporters_online`.
+- #13 `/api/work/*` endpoints now carry `X-RateLimit-*` headers and expose them via CORS.
+
+Also switched the autonomous improvement routine to a continuous internal loop (ships many small
+tested changes per run, stops when it runs out of safe work) instead of one change per hour.
 
 ### 2026-07-30 (review hardening + online count)
 
