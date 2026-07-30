@@ -331,6 +331,97 @@ t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color
 t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
 t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
+console.log('\nvercel.json — security and cache response headers')
+const vercelCfg = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+const allRoutes = (vercelCfg.headers ?? []).find((h: any) => h.source === '/(.*)')
+const headerVal = (rule: any, key: string) =>
+  (rule?.headers ?? []).find((x: any) => x.key.toLowerCase() === key.toLowerCase())?.value
+t('vercel: all-routes rule exists', !!allRoutes)
+t('vercel: X-Content-Type-Options nosniff', headerVal(allRoutes, 'X-Content-Type-Options') === 'nosniff')
+t('vercel: Referrer-Policy no-referrer', headerVal(allRoutes, 'Referrer-Policy') === 'no-referrer')
+t('vercel: X-Frame-Options DENY', headerVal(allRoutes, 'X-Frame-Options') === 'DENY')
+t('vercel: Permissions-Policy disables camera/mic/geo',
+  headerVal(allRoutes, 'Permissions-Policy') === 'camera=(), microphone=(), geolocation=()')
+t('vercel: no CSP header (pages use per-page meta)',
+  headerVal(allRoutes, 'Content-Security-Policy') === undefined)
+const assetRule = (vercelCfg.headers ?? []).find((h: any) =>
+  /app\.css/.test(h.source) && /app\.js/.test(h.source) && /favicon\.svg/.test(h.source))
+t('vercel: static asset cache rule exists', !!assetRule)
+t('vercel: static assets are immutable long-cache',
+  /immutable/.test(headerVal(assetRule, 'Cache-Control') ?? '') &&
+  /max-age=31536000/.test(headerVal(assetRule, 'Cache-Control') ?? ''))
+console.log('\nopenai adapter — OpenAI-shaped passthrough with a re-stamped model')
+// translateRequest spreads the caller's body and overwrites only the model
+// (the prefix is stripped upstream), preserving every other field verbatim.
+const oreq = ADAPTERS.openai.translateRequest(
+  { model: 'openai/gpt-4o', messages: [{ role: 'user', content: 'hi' }], temperature: 0.4, stream: true },
+  'gpt-4o',
+) as any
+t('openai request re-stamps the model without the prefix', oreq.model === 'gpt-4o')
+t('openai request preserves the caller body', oreq.temperature === 0.4 && oreq.stream === true && oreq.messages[0].content === 'hi')
+
+// translateResponse likewise passes the provider JSON straight through, only
+// overwriting model so the caller sees the prefixed name they asked for.
+const ores = ADAPTERS.openai.translateResponse(
+  { id: 'cmpl_1', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: 'yo' }, finish_reason: 'stop' }], usage: { total_tokens: 3 } },
+  'openai/gpt-4o',
+) as any
+t('openai response is handed through unchanged but for the model', ores.model === 'openai/gpt-4o' && ores.id === 'cmpl_1' && ores.choices[0].message.content === 'yo' && ores.usage.total_tokens === 3)
+
+// headers carry a Bearer token; endpoint is OpenAI's chat completions URL.
+const ohdr = ADAPTERS.openai.headers('sk-openai-xyz')
+t('openai headers use Bearer auth', ohdr.authorization === 'Bearer sk-openai-xyz' && ohdr['content-type'] === 'application/json')
+t('openai endpoint is the chat completions URL', ADAPTERS.openai.endpoint === 'https://api.openai.com/v1/chat/completions')
+
+// translateStream is a literal passthrough — already OpenAI-shaped, so the
+// upstream ReadableStream is returned as-is (same reference, bytes untouched).
+const oStreamRaw = 'data: {"choices":[{"delta":{"content":"passthrough"}}]}\n\ndata: [DONE]\n\n'
+const oUpstream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode(oStreamRaw)); c.close() } })
+const oStreamOut = ADAPTERS.openai.translateStream(oUpstream, 'openai/gpt-4o')
+t('openai stream is returned as the same object (no translation)', oStreamOut === oUpstream)
+let oStreamText = ''
+for await (const c of oStreamOut as any) oStreamText += new TextDecoder().decode(c)
+t('openai stream bytes pass through untouched', oStreamText === oStreamRaw)
+
+console.log('\ngroq adapter — reuses the OpenAI translators, only the endpoint differs')
+t('groq is its own id but shares openai translators', ADAPTERS.groq.id === 'groq' && ADAPTERS.groq.translateRequest === ADAPTERS.openai.translateRequest && ADAPTERS.groq.translateResponse === ADAPTERS.openai.translateResponse)
+t('groq endpoint points at Groq, not OpenAI', ADAPTERS.groq.endpoint === 'https://api.groq.com/openai/v1/chat/completions')
+const greq = ADAPTERS.groq.translateRequest(
+  { model: 'groq/llama-3.3-70b-versatile', messages: [{ role: 'user', content: 'hey' }], top_p: 0.9 },
+  'llama-3.3-70b-versatile',
+) as any
+t('groq request re-stamps the model and keeps the body', greq.model === 'llama-3.3-70b-versatile' && greq.top_p === 0.9)
+const gres = ADAPTERS.groq.translateResponse({ id: 'gcmpl', object: 'chat.completion', choices: [] }, 'groq/llama-3.3-70b-versatile') as any
+t('groq response re-stamps the model', gres.model === 'groq/llama-3.3-70b-versatile' && gres.id === 'gcmpl')
+const gHdr = ADAPTERS.groq.headers('gsk-abc')
+t('groq headers use Bearer auth', gHdr.authorization === 'Bearer gsk-abc')
+const gUpstream = new ReadableStream<Uint8Array>({ start(c) { c.close() } })
+t('groq stream is a passthrough too', ADAPTERS.groq.translateStream(gUpstream, 'groq/llama-3.3-70b-versatile') === gUpstream)
+console.log('\nbody size cap — oversized proxy requests are rejected before any upstream call')
+const { MAX_BODY_BYTES } = await import('../lib/gateway.ts')
+const capKey = await issueKey('cap_user', 'free')
+const capConn = await seal({ provider: 'anthropic', apiKey: 'sk-ant-cccccccc', owner: 'cap_user', createdAt: Date.now(), label: 'cap' })
+
+// A body just over the cap must 400 before the pool is even opened. Guard the
+// real fetch so a leak past the cap would be caught as an unexpected call.
+const realFetchCap = globalThis.fetch
+let capUpstreamCalls = 0
+globalThis.fetch = (async () => { capUpstreamCalls++; return new Response('{}', { status: 200 }) }) as typeof fetch
+
+const bigContent = 'x'.repeat(MAX_BODY_BYTES + 1024)
+const oversizedRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${capKey}`, 'x-fanout-connection': capConn },
+  body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: bigContent }] }),
+}))
+const oversizedJson = await oversizedRes.json()
+globalThis.fetch = realFetchCap
+
+t('an oversized body returns 400', oversizedRes.status === 400, `status=${oversizedRes.status}`)
+t('the oversized rejection made no upstream call', capUpstreamCalls === 0, `calls=${capUpstreamCalls}`)
+t('the oversized rejection keeps CORS', oversizedRes.headers.get('access-control-allow-origin') === '*')
+t('the oversized rejection carries a {message,type} envelope', typeof oversizedJson.error?.message === 'string' && /too large/i.test(oversizedJson.error.message))
+t('the body cap is a sane 256KB', MAX_BODY_BYTES === 256 * 1024, `MAX_BODY_BYTES=${MAX_BODY_BYTES}`)
 console.log('\nhomepage — social share preview (Open Graph + Twitter card)')
 const indexHtml = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8')
 t('index has og:title Fanout', indexHtml.includes('property="og:title" content="Fanout"'))
