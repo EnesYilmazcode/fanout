@@ -95,6 +95,13 @@ const RELAY_PROVIDER = 'claude-code'
 const RELAY_WAIT_MS = 20_000
 const MAX_JOB_BYTES = 32 * 1024
 
+// Upper bound on the raw request body, enforced before any parse or upstream
+// fetch. The proxy re-serialises the body and ships it to a provider, so an
+// oversized payload is both an amplification vector and a way to burn function
+// time on JSON.parse. 256KB is far past any legitimate chat request (the relay
+// caps its own message payload at 32KB) and rejects the rest cleanly.
+export const MAX_BODY_BYTES = 256 * 1024
+
 /** OpenAI content can be a string or an array of typed parts; jobs carry plain text. */
 function flatten(content: unknown): string {
   if (typeof content === 'string') return content
@@ -184,9 +191,22 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
   if (g.fail) return g.fail
   const { auth, headers } = g
 
+  // Read the body once as text so we can bound its size before parsing or
+  // touching any upstream. An oversized payload is rejected here — before the
+  // relay submit or any provider fetch — so it can never be amplified outward.
+  let rawBody: string
+  try {
+    rawBody = await req.text()
+  } catch {
+    return err(400, 'Could not read the request body.', 'invalid_request_error', headers)
+  }
+  if (rawBody.length > MAX_BODY_BYTES) {
+    return err(400, `Request body too large: cap is ${MAX_BODY_BYTES / 1024}KB.`, 'invalid_request_error', headers)
+  }
+
   let body: ChatRequest
   try {
-    body = (await req.json()) as ChatRequest
+    body = JSON.parse(rawBody) as ChatRequest
   } catch {
     return err(400, 'Request body must be valid JSON.', 'invalid_request_error', headers)
   }

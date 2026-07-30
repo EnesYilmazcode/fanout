@@ -331,5 +331,31 @@ t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color
 t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
 t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
+console.log('\nbody size cap — oversized proxy requests are rejected before any upstream call')
+const { MAX_BODY_BYTES } = await import('../lib/gateway.ts')
+const capKey = await issueKey('cap_user', 'free')
+const capConn = await seal({ provider: 'anthropic', apiKey: 'sk-ant-cccccccc', owner: 'cap_user', createdAt: Date.now(), label: 'cap' })
+
+// A body just over the cap must 400 before the pool is even opened. Guard the
+// real fetch so a leak past the cap would be caught as an unexpected call.
+const realFetchCap = globalThis.fetch
+let capUpstreamCalls = 0
+globalThis.fetch = (async () => { capUpstreamCalls++; return new Response('{}', { status: 200 }) }) as typeof fetch
+
+const bigContent = 'x'.repeat(MAX_BODY_BYTES + 1024)
+const oversizedRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${capKey}`, 'x-fanout-connection': capConn },
+  body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: bigContent }] }),
+}))
+const oversizedJson = await oversizedRes.json()
+globalThis.fetch = realFetchCap
+
+t('an oversized body returns 400', oversizedRes.status === 400, `status=${oversizedRes.status}`)
+t('the oversized rejection made no upstream call', capUpstreamCalls === 0, `calls=${capUpstreamCalls}`)
+t('the oversized rejection keeps CORS', oversizedRes.headers.get('access-control-allow-origin') === '*')
+t('the oversized rejection carries a {message,type} envelope', typeof oversizedJson.error?.message === 'string' && /too large/i.test(oversizedJson.error.message))
+t('the body cap is a sane 256KB', MAX_BODY_BYTES === 256 * 1024, `MAX_BODY_BYTES=${MAX_BODY_BYTES}`)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
