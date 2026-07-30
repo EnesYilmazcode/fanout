@@ -3,9 +3,9 @@
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
 
-**Status:** deployed and verified live — but see the open question on the sharing model
+**Status:** deployed and verified live — sharing-model question resolved, see Decision log
 **Live URL:** https://fanout-tawny.vercel.app
-**Last updated:** 2026-07-28
+**Last updated:** 2026-07-30
 
 ---
 
@@ -30,50 +30,51 @@ stale relative to the code. Newest entries at the top of each log.
 | 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
 | 14 | Adversarial security review of the live deployment | — |
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
+| 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
+| 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
 
-### ⚠️ Open: the sharing model is wrong for the intended product
+### Resolved: Fanout is a personal capacity router
 
-**Parked 2026-07-28, needs a decision before further building.**
+The parked P0 — personal router or marketplace — was put to a five-perspective design review
+on 2026-07-30 (full report: `docs/design/2026-07-30-dashboard-panel.md`). The verdict was
+unanimous: **personal capacity router.** Both supporter mechanisms are dead as proposed:
 
-What exists is a *personal* key router: you pool **your own** keys and fail over between them.
+- **Key deposit (marketplace):** *killed*, not deferred. The target seller (Claude Max, Cursor,
+  Copilot) has no API key to deposit — those products auth over OAuth and prohibit credential
+  sharing; a console key is pay-per-token, so depositing one is donating money at cost; and
+  serving a stranger's key requires deleting the AAD owner-binding, converting
+  `MASTER_ENCRYPTION_KEY` into a vault of other people's credentials.
+- **Claude Code worker relay:** the machinery is real (headless `claude -p`, long-lived OAuth
+  tokens, a small polling loop) but subscription auth is licensed for the holder's own use and
+  Anthropic explicitly enforces against it in third-party services — every supporter node would
+  risk a ban. It also cannot fit Vercel Hobby function lifetimes or Upstash's free tier.
+  Salvage: **self-relay** — your own idle machine serving your own pool — as a future mode of
+  the npm package.
 
-What Fanout is meant to be is a *two-sided marketplace*: people with spare AI capacity deposit
-keys, people who want cheap access consume them. Sellers and buyers are different people.
+What replaces "supporters": sharing with people you know goes through the provider, not through
+Fanout — invite them into your Anthropic/OpenAI organization so they hold their own key and seal
+their own blob. That is the one sharing mechanism provider terms are built to permit.
 
-These are opposite designs, and the current one structurally blocks the intended one. Connection
-blobs are bound to their owner as AES-GCM additional data, so a buyer **cannot** use a seller's
-key — decryption fails by design. That property was deliberately built and then hardened in the
-security review; it is exactly the property a marketplace must not have.
+### Future products (explicitly separate, each with its real cost)
 
-Rebuilding as a marketplace requires:
+Not features of this codebase. If either is ever pursued, it is a new commitment:
 
-| Piece | Note |
-|---|---|
-| Shared server-side key pool | Sellers' keys must be usable by strangers — the owner binding comes out |
-| Buyer → arbitrary seller routing | Does not exist |
-| Per-seller usage accounting | Needed to pay anyone; does not exist |
-| **A datastore** | Unavoidable. The no-database property (see Decision log) cannot survive this |
-
-Upstash Redis on Vercel's free tier is the intended landing spot.
-
-**Also unresolved — a premise problem worth settling before the pitch.** The seller story is
-"monetize your idle coding subscription", but Claude Max, Cursor, and Copilot subscriptions do not
-issue API keys: they authenticate over OAuth, are seat-licensed to one person, and reselling access
-violates their terms. What can actually be deposited is a console API key, which is pay-per-token —
-so there is no idle headroom to sell, only resale at cost. The demo works either way; the pitch does
-not survive contact with someone who knows this. Decide whether to reframe.
+- **Donation credit pool** ("Patreon for inference") — legally clean; requires commercial
+  hosting (Vercel Pro), a datastore for accounting, per-user caps, and an abuse pipeline.
+- **Open-model volunteer network** ("BOINC for open weights") — supporters host Ollama/vLLM;
+  fixes licensing entirely, but needs a persistent broker, paid hosting, and a disclosed
+  plaintext trust model. Effectively a re-platforming that reuses the adapter pattern.
 
 ### Next
 
 | Priority | Item | Why |
 |---|---|---|
-| P0 | **Decide: personal router or marketplace** | Everything below depends on it; see above |
-| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet |
-| P1 | Publish an npm package for the seller side | Depositing a key is awkward as raw curl. Buyers need nothing — the OpenAI SDK already works |
-| P2 | Record the demo clip for the post | The pooling failover is the visual — show two keys, kill one |
-| P1 | `X-Fanout-Pool-Health` response header | Surface which connections failed, not just which one won |
-| P2 | Retry budget per request | One bad pool of 20 blobs currently costs 20 upstream calls |
+| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet. Must land before promoting the setup page |
+| P1 | GitHub OAuth key recovery | Deterministic re-mint from `HMAC(master_secret, github_id)` — additive, never a gate, zero storage. Covers the lost-key-orphans-blobs failure the setup page's backup button only mitigates |
+| P1 | npm client package | Mint/seal/compose-config from the terminal, mirroring the setup page. Design so a self-relay mode can be added later |
+| P2 | Retry budget per request | One bad pool of 8 blobs currently costs 8 upstream calls |
 | P2 | Token usage in streaming responses | Anthropic sends `message_delta.usage`; currently dropped |
+| P2 | Record the demo clip for the post | Failover across your own providers — show two keys, kill one |
 
 ### Icebox
 
@@ -91,6 +92,16 @@ project — revisit only if this stops being a demo.
 ## Decision log
 
 Why things are the way they are, so a future change doesn't quietly undo a deliberate choice.
+
+**2026-07-30 · Personal capacity router, not a marketplace.**
+Settled by a five-perspective design review (`docs/design/2026-07-30-dashboard-panel.md`).
+The marketplace lost independently on four grounds — terms (credential sharing and subscription
+relay are both prohibited by every relevant provider), economics (nothing depositable has idle
+headroom), security (it requires deleting the AAD owner-binding), and infrastructure (relay
+cannot fit Vercel Hobby or Upstash free tiers). Any one would have sufficed. The AAD
+owner-binding stays. The "dashboard" shipped as a static no-login setup page for the same
+reason: minting is unauthenticated, so a login would gate nothing; identity arrives later, if
+ever, as optional OAuth key *recovery*, not as a gate.
 
 **2026-07-28 · No database, by construction.**
 Vercel's free tier has no first-party datastore, and the two things a datastore would buy
@@ -168,6 +179,19 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30
+
+- **Sharing-model P0 resolved: personal capacity router.** Five-perspective design review;
+  full report committed to `docs/design/2026-07-30-dashboard-panel.md`. Marketplace framing
+  removed from the board, the landing page, and the package description; future products
+  (donation pool, open-model volunteer network) recorded separately with their real costs.
+- **Setup page shipped** at `/setup.html` — mint, seal, and one copyable config block
+  (env / curl / Python / JS), localStorage-backed with download/restore backup, strict CSP,
+  no login and no backend changes. Verified in a real browser under the CSP: 12 checks.
+- **`X-Fanout-Pool-Health` response header** — every attempt's outcome in walk order
+  (`work:429, personal:ok`) on success and failure paths. Fanout's custom headers are now
+  CORS-exposed so cross-origin callers can read them. Five new smoke assertions (27 total).
 
 ### 2026-07-29
 

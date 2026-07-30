@@ -2,7 +2,7 @@
   "name": "fanout",
   "version": "0.1.0",
   "private": true,
-  "description": "Crowdsourced AI API — one endpoint, everyone's keys.",
+  "description": "Personal AI capacity router — one endpoint, all your keys, automatic failover.",
   "scripts": {
     "secrets": "node scripts/gen-secrets.mjs",
     "typecheck": "tsc --noEmit",

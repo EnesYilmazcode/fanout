@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fanout — Crowdsourced AI API</title>
-<meta name="description" content="One endpoint. Everyone's keys. A stateless multi-provider AI proxy running on the edge." />
+<title>Fanout — pool your AI keys</title>
+<meta name="description" content="One endpoint, all your keys. A stateless multi-provider AI proxy with automatic failover, running on the edge." />
 <style>
   :root {
     --bg: #0d0f12; --panel: #14171c; --line: #232830; --ink: #e8eaed;
@@ -50,7 +50,7 @@
 <div class="wrap">
 
   <h1>Fan<span>out</span></h1>
-  <p class="tag">One endpoint. Everyone's keys. Bring your own credentials, pool them, and call any
+  <p class="tag">One endpoint, all your keys. Bring your own credentials, pool them, and call any
   provider through a single OpenAI-shaped API — with no database anywhere in the stack.
   Setting up a real tool? The <a href="/setup.html">setup page</a> hands you one copyable config
   block.</p>
@@ -130,8 +130,8 @@ await fanout.chat.completions.create({
        "messages":[{"role":"user","content":"hi"}]}'</pre>
     <p style="margin:14px 0 0;color:var(--dim);font-size:13px">
       Comma-separate connections to pool them. Fanout picks one at random and fails over to the
-      next when a provider returns 401, 429, or 5xx — so a pool of donated keys behaves like one
-      key with everyone's combined quota. Response headers tell you which one served you.
+      next when a provider returns 401, 429, or 5xx — so your pool behaves like one key with the
+      combined quota. Response headers tell you which one served you and how each attempt went.
     </p>
   </div>
 
