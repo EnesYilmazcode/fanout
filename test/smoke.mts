@@ -232,5 +232,12 @@ await submitJob('claude-code', [{ role: 'user', content: 'warm2' }])
 await workNext(new Request('https://x/api/work/next', { method: 'POST', headers: { authorization: `Bearer ${otherKey}` } }))
 t('a second live node raises the count', (await countLive()) >= baseline + 1)
 
+console.log('\nhealth — reports relay and queue state')
+const health = (await import('../api/health.ts')).default
+const healthBody = await (await health()).json()
+t('health reports the queue backend', healthBody.queue === 'memory', healthBody.queue)
+t('health reports supporters_online as a number', typeof healthBody.supporters_online === 'number')
+t('health supporters_online matches countLive', healthBody.supporters_online === (await countLive()))
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
