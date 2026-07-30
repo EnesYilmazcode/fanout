@@ -32,6 +32,11 @@ curl $BASE/api/v1/chat/completions \
 Store the Fanout key when you get it. Nothing on the server remembers it, so it cannot be shown
 again.
 
+Prefer a browser? The [setup page](https://fanout-tawny.vercel.app/setup.html) does all three
+steps and hands you one copyable config block (env vars, curl, Python, or JS), kept only in
+your browser's localStorage — with a download-a-backup button, because that cache is the only
+copy of your key anywhere.
+
 ## How it works with no database
 
 Two ideas carry the whole thing.
@@ -59,9 +64,12 @@ instead of spending their credits.
 
 **The fanout part.** Several blobs in one header become a pool. The proxy starts at a random
 offset so the first blob in the list doesn't absorb everything, then walks to the next one on a
-401, 403, 429, or 5xx. Response headers report which connection served the request and how many
-attempts it took. Eight blobs per request is the cap, because failover is serial and an uncapped
-pool turns one call into a hundred upstream calls.
+401, 403, 429, or 5xx. Response headers report which connection served the request
+(`X-Fanout-Connection-Label`), how many attempts it took (`X-Fanout-Attempt`), and every
+attempt's outcome in walk order (`X-Fanout-Pool-Health: work:429, personal:ok`) — so a
+half-dead pool is visible per request instead of silently degrading. Eight blobs per request is
+the cap, because failover is serial and an uncapped pool turns one call into a hundred upstream
+calls.
 
 ## Endpoints
 
