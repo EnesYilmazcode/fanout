@@ -7,6 +7,7 @@
     "secrets": "node scripts/gen-secrets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsx test/smoke.mts",
+    "test:e2e": "tsx test/e2e.mts",
     "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
