@@ -58,6 +58,9 @@ stale relative to the code. Newest entries at the top of each log.
 | 41 | Auth edge-case tests (expiry, payload swap, junk bearer) | `test` (#39) |
 | 42 | `docs/ARCHITECTURE.md` | `docs` (#40) |
 | 43 | `/api/health` reports the deployed commit | `feat` (#41) |
+| 44 | End-to-end test runs in CI | `ci` (#45) |
+| 45 | `SECURITY.md` (reporting via GitHub private advisory) | `docs` (#46) |
+| 46 | Clean 503 when server secrets are unconfigured | `fix` (#47) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -205,6 +208,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (overnight — fifth fleet)
+
+- **Fifth parallel fleet** (issues #42-#44, PRs #45-#47): the end-to-end test now runs in CI, a
+  `SECURITY.md` states the reporting route (GitHub private advisory), scope, and honest limits,
+  and the key/connect/proxy endpoints return a clean 503 "Fanout is not configured" when a server
+  secret is missing instead of a generic 500. The maintainer's personal email was kept out of the
+  public SECURITY.md by choice.
 
 ### 2026-07-30 (overnight — fourth fleet)
 
