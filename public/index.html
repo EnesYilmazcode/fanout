@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#ffffff" />
 <!-- This page keeps a bearer key in localStorage, so any XSS is a key-theft
      primitive. The CSP is deliberately strict: no inline script or style, no
      third-party anything, network calls to this origin only. -->
@@ -10,11 +11,14 @@
       content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
 <title>Fanout</title>
 <meta name="description" content="One API key. Answers come from supporters running Claude Code." />
+<!-- Favicon is a same-origin file, not a data: URI: the strict CSP sets
+     img-src 'self' (no data:), so an inline data: icon would be blocked. -->
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
 
-<button id="mode-switch">Become a supporter</button>
+<button id="mode-switch" aria-label="Switch between getting a key and becoming a supporter">Become a supporter</button>
 
 <main>
   <h1>Fanout</h1>
@@ -39,7 +43,7 @@
   <section id="view-support" hidden>
     <p class="lead">Paste this into Claude Code or Codex:</p>
     <pre id="worker"></pre>
-    <button id="btn-copy-worker">Copy</button>
+    <button id="btn-copy-worker" aria-label="Copy the supporter brief" aria-live="polite">Copy</button>
     <div class="status" id="status">
       <span class="dot" id="status-dot"></span>
       <span id="status-text">Waiting for your node to connect…</span>
