@@ -54,6 +54,10 @@ stale relative to the code. Newest entries at the top of each log.
 | 37 | Social share preview (OG/Twitter) on the homepage | `feat(web)` (#31) |
 | 38 | Smoke coverage for the OpenAI and Groq adapters | `test` (#32) |
 | 39 | Request body size cap on the proxy path | `fix` (#33) |
+| 40 | Branded 404 page | `feat(web)` (#38) |
+| 41 | Auth edge-case tests (expiry, payload swap, junk bearer) | `test` (#39) |
+| 42 | `docs/ARCHITECTURE.md` | `docs` (#40) |
+| 43 | `/api/health` reports the deployed commit | `feat` (#41) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -201,6 +205,13 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (overnight — fourth fleet)
+
+- **Fourth parallel fleet** (issues #34-#37, PRs #38-#41): a branded 404 page, auth edge-case
+  tests (expiry enforcement, payload-swap rejection, junk-bearer handling, tier preservation),
+  a concise `docs/ARCHITECTURE.md`, and a `commit` field on `/api/health` from
+  `VERCEL_GIT_COMMIT_SHA` so you can confirm which build is live.
 
 ### 2026-07-30 (overnight — third fleet)
 
