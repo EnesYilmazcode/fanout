@@ -331,5 +331,53 @@ t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color
 t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
 t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
+console.log('\nopenai adapter — OpenAI-shaped passthrough with a re-stamped model')
+// translateRequest spreads the caller's body and overwrites only the model
+// (the prefix is stripped upstream), preserving every other field verbatim.
+const oreq = ADAPTERS.openai.translateRequest(
+  { model: 'openai/gpt-4o', messages: [{ role: 'user', content: 'hi' }], temperature: 0.4, stream: true },
+  'gpt-4o',
+) as any
+t('openai request re-stamps the model without the prefix', oreq.model === 'gpt-4o')
+t('openai request preserves the caller body', oreq.temperature === 0.4 && oreq.stream === true && oreq.messages[0].content === 'hi')
+
+// translateResponse likewise passes the provider JSON straight through, only
+// overwriting model so the caller sees the prefixed name they asked for.
+const ores = ADAPTERS.openai.translateResponse(
+  { id: 'cmpl_1', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: 'yo' }, finish_reason: 'stop' }], usage: { total_tokens: 3 } },
+  'openai/gpt-4o',
+) as any
+t('openai response is handed through unchanged but for the model', ores.model === 'openai/gpt-4o' && ores.id === 'cmpl_1' && ores.choices[0].message.content === 'yo' && ores.usage.total_tokens === 3)
+
+// headers carry a Bearer token; endpoint is OpenAI's chat completions URL.
+const ohdr = ADAPTERS.openai.headers('sk-openai-xyz')
+t('openai headers use Bearer auth', ohdr.authorization === 'Bearer sk-openai-xyz' && ohdr['content-type'] === 'application/json')
+t('openai endpoint is the chat completions URL', ADAPTERS.openai.endpoint === 'https://api.openai.com/v1/chat/completions')
+
+// translateStream is a literal passthrough — already OpenAI-shaped, so the
+// upstream ReadableStream is returned as-is (same reference, bytes untouched).
+const oStreamRaw = 'data: {"choices":[{"delta":{"content":"passthrough"}}]}\n\ndata: [DONE]\n\n'
+const oUpstream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode(oStreamRaw)); c.close() } })
+const oStreamOut = ADAPTERS.openai.translateStream(oUpstream, 'openai/gpt-4o')
+t('openai stream is returned as the same object (no translation)', oStreamOut === oUpstream)
+let oStreamText = ''
+for await (const c of oStreamOut as any) oStreamText += new TextDecoder().decode(c)
+t('openai stream bytes pass through untouched', oStreamText === oStreamRaw)
+
+console.log('\ngroq adapter — reuses the OpenAI translators, only the endpoint differs')
+t('groq is its own id but shares openai translators', ADAPTERS.groq.id === 'groq' && ADAPTERS.groq.translateRequest === ADAPTERS.openai.translateRequest && ADAPTERS.groq.translateResponse === ADAPTERS.openai.translateResponse)
+t('groq endpoint points at Groq, not OpenAI', ADAPTERS.groq.endpoint === 'https://api.groq.com/openai/v1/chat/completions')
+const greq = ADAPTERS.groq.translateRequest(
+  { model: 'groq/llama-3.3-70b-versatile', messages: [{ role: 'user', content: 'hey' }], top_p: 0.9 },
+  'llama-3.3-70b-versatile',
+) as any
+t('groq request re-stamps the model and keeps the body', greq.model === 'llama-3.3-70b-versatile' && greq.top_p === 0.9)
+const gres = ADAPTERS.groq.translateResponse({ id: 'gcmpl', object: 'chat.completion', choices: [] }, 'groq/llama-3.3-70b-versatile') as any
+t('groq response re-stamps the model', gres.model === 'groq/llama-3.3-70b-versatile' && gres.id === 'gcmpl')
+const gHdr = ADAPTERS.groq.headers('gsk-abc')
+t('groq headers use Bearer auth', gHdr.authorization === 'Bearer gsk-abc')
+const gUpstream = new ReadableStream<Uint8Array>({ start(c) { c.close() } })
+t('groq stream is a passthrough too', ADAPTERS.groq.translateStream(gUpstream, 'groq/llama-3.3-70b-versatile') === gUpstream)
+
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
