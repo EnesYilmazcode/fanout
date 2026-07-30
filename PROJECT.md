@@ -61,6 +61,8 @@ stale relative to the code. Newest entries at the top of each log.
 | 44 | End-to-end test runs in CI | `ci` (#45) |
 | 45 | `SECURITY.md` (reporting via GitHub private advisory) | `docs` (#46) |
 | 46 | Clean 503 when server secrets are unconfigured | `fix` (#47) |
+| 47 | e2e failure-mode coverage (504, 400, 403 over HTTP) | `test` (#50) |
+| 48 | Contributor templates + `CONTRIBUTING.md` | `docs` (#51) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -208,6 +210,17 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-30 (overnight — sixth fleet)
+
+- **Sixth parallel fleet** (issues #48-#49, PRs #50-#51): the e2e test now also covers the
+  hardened failure modes over real HTTP (no-supporter 504, oversized-body 400, cross-key blob
+  403, missing-connection 400), and the repo gained a `CONTRIBUTING.md`, a PR template, and issue
+  templates.
+- **Overnight loop wound down here** after six fleets (26 PRs, issues #2-#49): the genuinely
+  valuable, safe backlog is worked through. Remaining ideas are either product decisions for the
+  founder (the two "future products") or need a real funded provider key (the last unverified
+  link). The heartbeat stays armed for periodic checks rather than manufacturing busywork.
 
 ### 2026-07-30 (overnight — fifth fleet)
 
