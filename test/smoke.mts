@@ -490,6 +490,22 @@ t('SECURITY.md states the 90 day leaked-key limit', /90 day/.test(secDoc) && /re
 t('SECURITY.md states rate limiting is per instance and approximate', /per instance/i.test(secDoc) && /approximate/i.test(secDoc))
 t('SECURITY.md states the relay is plaintext trust', /plaintext trust/i.test(secDoc) && /reads the prompts/i.test(secDoc))
 t('SECURITY.md uses no em dashes', !secDoc.includes('—'))
+console.log('\nconfig — server-secret presence check gates a clean 503')
+const { hasSecrets } = await import('../lib/config.ts')
+t('hasSecrets is true when both secrets are set', hasSecrets('MASTER_SECRET', 'MASTER_ENCRYPTION_KEY'))
+const savedSecret = process.env.MASTER_SECRET
+delete process.env.MASTER_SECRET
+t('hasSecrets is false when MASTER_SECRET is unset', hasSecrets('MASTER_SECRET') === false)
+t('hasSecrets is false when any required secret is unset', hasSecrets('MASTER_SECRET', 'MASTER_ENCRYPTION_KEY') === false)
+process.env.MASTER_SECRET = savedSecret
+t('hasSecrets recovers once the secret is restored', hasSecrets('MASTER_SECRET', 'MASTER_ENCRYPTION_KEY'))
+t('hasSecrets treats an empty string as unset', (() => {
+  const s = process.env.MASTER_SECRET
+  process.env.MASTER_SECRET = ''
+  const r = hasSecrets('MASTER_SECRET')
+  process.env.MASTER_SECRET = s
+  return r === false
+})())
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

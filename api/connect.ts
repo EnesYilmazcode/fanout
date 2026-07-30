@@ -6,6 +6,7 @@
 import { verifyKey, bearer } from '../lib/auth'
 import { seal } from '../lib/seal'
 import { ADAPTERS } from '../lib/providers'
+import { hasSecrets, NOT_CONFIGURED } from '../lib/config'
 
 export const config = { runtime: 'edge' }
 
@@ -35,6 +36,13 @@ export default async function handler(req: Request): Promise<Response> {
 async function handleConnect(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json(405, { error: { message: 'Use POST.' } })
+
+  // Verifying the key needs MASTER_SECRET; sealing the blob needs
+  // MASTER_ENCRYPTION_KEY. Missing either would throw mid-operation — return a
+  // clean 503 up front instead.
+  if (!hasSecrets('MASTER_SECRET', 'MASTER_ENCRYPTION_KEY')) {
+    return json(503, { error: { message: NOT_CONFIGURED, type: 'api_error' } })
+  }
 
   const auth = await verifyKey(bearer(req))
   if (!auth) {
