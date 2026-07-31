@@ -5,7 +5,7 @@ stale relative to the code. Newest entries at the top of each log.
 
 **Status:** deployed and verified live — sharing-model question resolved, see Decision log
 **Live URL:** https://fanout-tawny.vercel.app
-**Last updated:** 2026-07-30
+**Last updated:** 2026-07-31
 
 ---
 
@@ -65,6 +65,10 @@ stale relative to the code. Newest entries at the top of each log.
 | 48 | Contributor templates + `CONTRIBUTING.md` | `docs` (#51) |
 | 49 | One-line supporter connect via hosted `/llms.txt` | `feat(web)` (#52) |
 | 50 | Background supporter worker (`claude -p`) + count-based signal | `feat(web)` (#53) |
+| 51 | README leads with human graphics (hero + two-sided how-it-works SVGs) | `docs` (#54) |
+| 52 | Upstash queue drops stale jobs by age; work/* guard backend errors (503 envelope) | `fix(queue)` (#55) |
+| 53 | Dead-code sweep + shared `rlHeaders` (deduped from 4 copies) | `refactor` (#56) |
+| 54 | Four hollow tests rewired to real code paths (label sanitizer, IP limit, TTL, commit) | `test` (#57) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -212,6 +216,31 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-07-31 (README graphics + audit-driven fixes)
+
+- **README made human and visual** (#54): a hero banner and a two-sided how-it-works diagram
+  (your app -> Fanout -> your provider keys | supporters running Claude Code / Codex), both as
+  self-contained SVGs that render inline on GitHub. Intro reworked so both paths land in the
+  first screen; mermaid kept as a text fallback.
+- **Deep audit** (20 verifier agents, 5 lenses: bugs / dead code / useless tests / simplification
+  / config correctness). Every finding was adversarially verified against source before any fix.
+  The confirmed set was triaged and the real, safe ones shipped:
+  - **Real prod bug** (#55): the Upstash queue never expired jobs by age, while the memory store
+    did. A queue that filled while no supporter was online would feed the first node to connect a
+    backlog of already-abandoned prompts (real LLM quota spent on dead requests, live requests
+    starved behind them). `upstashStore.waitPop` now skips jobs older than `JOB_MAX_AGE_MS`,
+    matching the memory store. Also wrapped the `work/*` queue calls so an Upstash outage returns
+    a 503 JSON/CORS envelope instead of a bare platform 500.
+  - **Dead code + simplification** (#56): `rlHeaders()` was copy-pasted into four files, now
+    hoisted to a single export in `lib/ratelimit.ts`. `frames()` parsed an SSE `event:` line no consumer
+    read (dropped). Removed dead `id` attributes on the status dots, an unused catch binding, and
+    a no-op base64<->base64url round trip in `seal.ts`.
+  - **Tests that did not test** (#57): the label header-injection test asserted an inline copy of
+    the regex instead of the real sanitizer, now drives the connect handler and decrypts the
+    sealed blob. IP rate-limit enforcement was never exercised, so it now mints through the real
+    handler until it 429s. The 90-day TTL is now asserted on the issued key. `health.commit` now
+    asserts its specific "dev" fallback instead of `length > 0` (which could never fail).
 
 ### 2026-07-30 (background worker + Upstash reminder)
 
