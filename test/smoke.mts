@@ -25,6 +25,9 @@ const key = await issueKey('enes_abc123', 'free')
 t('issued key carries the fo_live_ prefix', key.startsWith('fo_live_'))
 const payload = await verifyKey(key)
 t('a valid key round-trips its payload', payload?.u === 'enes_abc123' && payload?.t === 'free')
+// The 90-day TTL is a real promise (the issue endpoint advertises expires_in_days: 90),
+// so pin the gap between issued-at and expiry rather than trusting the constant by eye.
+t('an issued key carries the 90-day TTL', payload!.e - payload!.i === 90 * 24 * 60 * 60, `${(payload!.e - payload!.i) / 86400}d`)
 t('a tampered signature is rejected', (await verifyKey(key.slice(0, -3) + 'xxx')) === null)
 t('a forged key is rejected', (await verifyKey('fo_live_nope.nope')) === null)
 t('a missing key is rejected', (await verifyKey(null)) === null)
@@ -153,16 +156,42 @@ t('pool size is capped', typeof MAX_POOL === 'number' && MAX_POOL > 0 && MAX_POO
 t('an IP ceiling exists for key minting', IP_ISSUE_LIMIT > 0 && IP_ISSUE_LIMIT <= 20)
 t('an IP ceiling exists for the proxy', IP_PROXY_LIMIT > 0)
 
+// Enforcement, not just the constant: drive the real /api/keys/issue handler from
+// one IP up to the ceiling, then assert the next mint from that same IP is refused.
+// A dedicated IP isolates the shared limiter bucket from every other test.
+const issueForRl = (await import('../api/keys/issue.ts')).default
+const rlIp = '198.51.100.42'
+const mintFromRlIp = () => issueForRl(new Request('https://x/api/keys/issue', {
+  method: 'POST', headers: { 'x-forwarded-for': rlIp, 'content-type': 'application/json' }, body: '{}',
+}))
+let mintsUnderCeilingOk = true
+for (let i = 0; i < IP_ISSUE_LIMIT; i++) if ((await mintFromRlIp()).status !== 200) mintsUnderCeilingOk = false
+const mintOverCeiling = await mintFromRlIp()
+t('minting stays open up to the IP ceiling', mintsUnderCeilingOk)
+t('minting past the IP ceiling is refused (429)', mintOverCeiling.status === 429, `status=${mintOverCeiling.status}`)
+
 const ipReq = (h: Record<string, string>) => new Request('https://x/', { headers: h })
 t('clientIp reads x-forwarded-for', clientIp(ipReq({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' })) === '1.2.3.4')
 t('clientIp falls back to x-real-ip', clientIp(ipReq({ 'x-real-ip': '9.9.9.9' })) === '9.9.9.9')
 t('clientIp degrades safely', clientIp(ipReq({})) === 'unknown')
 
-// The label is echoed into a response header, so control characters would be a
-// header-injection vector.
-const dirty = 'ok\r\nX-Injected: yes'
-const cleaned = dirty.replace(/[^\x20-\x7E]/g, '').slice(0, 40)
-t('control characters strip out of a label', !/[\r\n]/.test(cleaned), JSON.stringify(cleaned))
+// The label is echoed into the x-fanout-connection-label response header, so a
+// CRLF in it would be a header-injection vector. Drive the REAL sanitizer in
+// api/connect.ts (not an inline copy of the regex): seal a dirty label through
+// the handler, then decrypt the returned blob and assert it came out printable.
+const connectForLabel = (await import('../api/connect.ts')).default
+const labelKey = await issueKey('label_user', 'free')
+const dirtyLabelRes = await connectForLabel(new Request('https://x/api/connect', {
+  method: 'POST',
+  headers: { authorization: `Bearer ${labelKey}`, 'content-type': 'application/json' },
+  body: JSON.stringify({ provider: 'anthropic', apiKey: 'sk-ant-labeltest', label: 'ok\r\nX-Injected: yes' }),
+}))
+const dirtyLabelBody = await dirtyLabelRes.json()
+const sealedLabel = (await open(dirtyLabelBody.connection, 'label_user'))?.label ?? ''
+t('the connect handler seals a dirty label as printable ASCII',
+  dirtyLabelRes.status === 200 && !/[\r\n]/.test(sealedLabel) && sealedLabel === 'okX-Injected: yes',
+  JSON.stringify(sealedLabel))
+t('the connect response never reflects a raw CRLF label', !/[\r\n]/.test(dirtyLabelBody.label ?? ''))
 
 console.log('\npool health — failover surfaces per-connection outcomes')
 const { chatCompletions } = await import('../lib/gateway.ts')
@@ -332,7 +361,10 @@ const healthBody = await (await health()).json()
 t('health reports the queue backend', healthBody.queue === 'memory', healthBody.queue)
 t('health reports supporters_online as a number', typeof healthBody.supporters_online === 'number')
 t('health supporters_online matches countLive', healthBody.supporters_online === (await countLive()))
-t('health reports the deployed commit', typeof healthBody.commit === 'string' && healthBody.commit.length > 0, healthBody.commit)
+// Under test VERCEL_GIT_COMMIT_SHA is unset, so the field must be the explicit
+// "dev" fallback — asserting a specific value catches a broken/renamed field,
+// where "length > 0" could never fail.
+t('health reports the deployed commit', healthBody.commit === 'dev', healthBody.commit)
 const healthPreflight = await health(new Request('https://x/api/health', { method: 'OPTIONS' }))
 t('health OPTIONS preflight returns 204', healthPreflight.status === 204, `status=${healthPreflight.status}`)
 t('health preflight sets CORS methods', (healthPreflight.headers.get('access-control-allow-methods') ?? '').includes('GET'))
