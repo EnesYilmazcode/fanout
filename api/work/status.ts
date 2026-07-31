@@ -50,6 +50,11 @@ export default async function handler(req: Request): Promise<Response> {
     return json(429, { error: { message: 'Polling status too fast.', type: 'rate_limit_error' } }, rlh)
   }
 
-  const [connected, online] = await Promise.all([isLive(auth.u), countLive()])
+  let connected: boolean, online: number
+  try {
+    [connected, online] = await Promise.all([isLive(auth.u), countLive()])
+  } catch {
+    return json(503, { error: { message: 'Relay queue is temporarily unavailable.', type: 'server_error' } }, rlh)
+  }
   return json(200, { connected, online }, rlh)
 }

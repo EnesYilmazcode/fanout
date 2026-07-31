@@ -58,12 +58,20 @@ export default async function handler(req: Request): Promise<Response> {
   // Mark presence up front — a node polling for work is a live node whether or
   // not this particular poll returns a job. This is what /api/work/status reads
   // so the site can light up "connected" the moment the worker loop starts.
-  await markLive(auth.u)
+  try {
+    await markLive(auth.u)
 
-  const job = await nextJob(POLL_WINDOW_MS)
-  if (!job) return new Response(null, { status: 204, headers: { ...CORS, ...rlh } })
+    const job = await nextJob(POLL_WINDOW_MS)
+    if (!job) return new Response(null, { status: 204, headers: { ...CORS, ...rlh } })
 
-  return new Response(JSON.stringify(job), {
-    headers: { 'content-type': 'application/json', ...CORS, ...rlh },
-  })
+    return new Response(JSON.stringify(job), {
+      headers: { 'content-type': 'application/json', ...CORS, ...rlh },
+    })
+  } catch {
+    // The queue backend (Upstash) is unreachable. Return a JSON/CORS envelope
+    // the worker loop can read instead of a bare 500 with no headers.
+    return new Response(JSON.stringify({ error: { message: 'Relay queue is temporarily unavailable.', type: 'server_error' } }), {
+      status: 503, headers: { 'content-type': 'application/json', ...CORS, ...rlh },
+    })
+  }
 }
