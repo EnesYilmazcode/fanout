@@ -7,7 +7,7 @@
 
 import { verifyKey, bearer } from '../../lib/auth'
 import { isLive, countLive } from '../../lib/queue'
-import { check, clientIp, type Verdict } from '../../lib/ratelimit'
+import { check, clientIp, rlHeaders } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -21,16 +21,6 @@ const CORS = {
 // The page polls every few seconds; keep a generous ceiling so a background tab
 // that fell behind isn't locked out, but still bounded.
 const IP_STATUS_LIMIT = 60
-
-// Rate-limit headers from a limiter Verdict, matching how lib/gateway.ts builds
-// them so a cross-origin worker sees the same envelope on every Fanout endpoint.
-function rlHeaders(rl: Verdict) {
-  return {
-    'x-ratelimit-limit': String(rl.limit),
-    'x-ratelimit-remaining': String(rl.remaining),
-    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
-  }
-}
 
 function json(status: number, obj: unknown, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(obj), {

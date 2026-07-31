@@ -7,7 +7,7 @@
 
 import { verifyKey, bearer } from '../../lib/auth'
 import { nextJob, markLive } from '../../lib/queue'
-import { check, clientIp, type Verdict } from '../../lib/ratelimit'
+import { check, clientIp, rlHeaders } from '../../lib/ratelimit'
 
 export const config = { runtime: 'edge' }
 
@@ -16,16 +16,6 @@ const CORS = {
   'access-control-allow-headers': 'authorization, content-type',
   'access-control-allow-methods': 'POST, OPTIONS',
   'access-control-expose-headers': 'x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
-}
-
-// Rate-limit headers from a limiter Verdict, matching how lib/gateway.ts builds
-// them so a cross-origin worker sees the same envelope on every Fanout endpoint.
-function rlHeaders(rl: Verdict) {
-  return {
-    'x-ratelimit-limit': String(rl.limit),
-    'x-ratelimit-remaining': String(rl.remaining),
-    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
-  }
 }
 
 // Each poll holds the function open for up to POLL_WINDOW_MS, so the limit can

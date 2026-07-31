@@ -29,7 +29,7 @@ async function ensureKey() {
     fanoutKey = await mint()
     localStorage.setItem('fanout_key', fanoutKey)
     render()
-  } catch (e) {
+  } catch {
     $('key').textContent = 'unavailable — refresh to retry'
   }
 }

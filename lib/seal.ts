@@ -26,7 +26,9 @@ async function aesKey(): Promise<CryptoKey> {
   if (cachedKey) return cachedKey
   const b64 = process.env.MASTER_ENCRYPTION_KEY
   if (!b64) throw new Error('MASTER_ENCRYPTION_KEY is not set')
-  const raw = b64uToBytes(b64.replace(/\+/g, '-').replace(/\//g, '_'))
+  // b64uToBytes accepts standard base64 and base64url alike (it normalizes and
+  // pads internally), so MASTER_ENCRYPTION_KEY can be in either form.
+  const raw = b64uToBytes(b64)
   if (raw.length !== 32) throw new Error('MASTER_ENCRYPTION_KEY must decode to 32 bytes')
   cachedKey = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
     'encrypt',
