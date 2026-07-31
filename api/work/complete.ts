@@ -62,6 +62,10 @@ export default async function handler(req: Request): Promise<Response> {
     return json(400, { error: { message: `Answer too large: cap is ${MAX_ANSWER_BYTES / 1024}KB.` } }, rlh)
   }
 
-  await completeJob(id, text)
+  try {
+    await completeJob(id, text)
+  } catch {
+    return json(503, { error: { message: 'Relay queue is temporarily unavailable.', type: 'server_error' } }, rlh)
+  }
   return json(200, { ok: true }, rlh)
 }

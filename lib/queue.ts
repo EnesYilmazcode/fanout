@@ -65,7 +65,15 @@ function upstashStore(url: string, token: string): Store {
         if (remaining <= 0) return null
         const timeoutS = Math.max(1, Math.min(15, Math.ceil(remaining / 1000)))
         const res = (await cmd(['BRPOP', QUEUE_KEY, timeoutS])) as [string, string] | null
-        if (res && res[1]) return JSON.parse(res[1]) as Job
+        if (!res || !res[1]) continue
+        const job = JSON.parse(res[1]) as Job
+        // Drop jobs older than the memory store would have trimmed. Without this,
+        // a queue that filled while no supporter was online feeds the first node
+        // to connect a backlog of prompts whose callers already gave up — real
+        // LLM quota spent answering dead requests. Keep looping within the poll
+        // deadline until a live job or a timeout.
+        if (Date.now() - job.queuedAt > JOB_MAX_AGE_MS) continue
+        return job
       }
     },
     setResult: async (id, text) => { await cmd(['SET', `fanout:result:${id}`, text, 'EX', RESULT_TTL_S]) },
