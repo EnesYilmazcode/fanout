@@ -8,7 +8,7 @@
 import { verifyKey, bearer } from './auth'
 import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
-import { check, LIMITS, clientIp, IP_PROXY_LIMIT, type Verdict } from './ratelimit'
+import { check, LIMITS, clientIp, IP_PROXY_LIMIT, rlHeaders } from './ratelimit'
 import { submitJob, awaitResult, type Job } from './queue'
 import { hasSecrets, NOT_CONFIGURED } from './config'
 
@@ -28,14 +28,6 @@ function err(status: number, message: string, type = 'invalid_request_error', ex
     status,
     headers: { 'content-type': 'application/json', ...CORS, ...extra },
   })
-}
-
-function rlHeaders(rl: Verdict) {
-  return {
-    'x-ratelimit-limit': String(rl.limit),
-    'x-ratelimit-remaining': String(rl.remaining),
-    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
-  }
 }
 
 /** Verifies the key and meters the request. Returns a Response only on rejection. */

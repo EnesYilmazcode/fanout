@@ -14,6 +14,19 @@ const WINDOW_MS = 60_000
 
 export type Verdict = { ok: boolean; limit: number; remaining: number; resetAt: number }
 
+/**
+ * The rate-limit response headers for a Verdict. Every Fanout endpoint returns
+ * the same envelope so a cross-origin worker sees identical fields everywhere;
+ * keeping this in one place stops the four copies from drifting.
+ */
+export function rlHeaders(rl: Verdict): Record<string, string> {
+  return {
+    'x-ratelimit-limit': String(rl.limit),
+    'x-ratelimit-remaining': String(rl.remaining),
+    'x-ratelimit-reset': String(Math.ceil(rl.resetAt / 1000)),
+  }
+}
+
 export function check(userId: string, limit: number): Verdict {
   const now = Date.now()
   let w = buckets.get(userId)

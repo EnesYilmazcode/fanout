@@ -44,8 +44,9 @@ function chunk(model: string, id: string, delta: Record<string, unknown>, finish
 }
 
 /**
- * Reads an SSE body and yields parsed `{event, data}` frames. Handles chunk
+ * Reads an SSE body and yields each frame's `data` payload. Handles chunk
  * boundaries splitting mid-frame, which is the usual source of dropped tokens.
+ * The `event:` line is ignored: callers dispatch on the JSON `type` inside data.
  */
 async function* frames(upstream: ReadableStream<Uint8Array>) {
   const reader = upstream.getReader()
@@ -59,13 +60,11 @@ async function* frames(upstream: ReadableStream<Uint8Array>) {
     while ((idx = buf.indexOf('\n\n')) !== -1) {
       const raw = buf.slice(0, idx)
       buf = buf.slice(idx + 2)
-      let event = ''
       let data = ''
       for (const line of raw.split('\n')) {
-        if (line.startsWith('event:')) event = line.slice(6).trim()
-        else if (line.startsWith('data:')) data += line.slice(5).trim()
+        if (line.startsWith('data:')) data += line.slice(5).trim()
       }
-      if (data) yield { event, data }
+      if (data) yield { data }
     }
   }
 }
