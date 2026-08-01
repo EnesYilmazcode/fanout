@@ -74,6 +74,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 57 | Status polling slowed to 10s and paused for hidden tabs | `fix(web)` (#61) |
 | 58 | Streaming relay holds ~110s so real supporter answers arrive; honest 504 | `feat(relay)` (#59, #60) |
 | 59 | A caller that gives up withdraws its job instead of leaving it queued | `fix(relay)` (#67) |
+| 60 | Supporter worker loop handles error statuses, backs off, always answers | `fix(supporter)` (#70) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -224,6 +225,13 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
+- **The supporter worker loop stopped being dangerous on error paths** (#70). It decided "is there
+  work" by testing whether the body was empty. A 204 is empty and was fine, but 401, 429 and 503
+  all return non-empty JSON, so all three were treated as jobs, and none of them long-poll. With no
+  sleep in the loop, one rate-limit trip turned a polite worker into a hot loop on a volunteer's
+  machine, spawning `claude -p` each pass. It now branches on the status code, backs off,
+  preflights jq, and always POSTs an answer even when the attempt failed, because taking a job
+  removes it from the queue and silence leaves the caller with nothing.
 - **A caller that gives up no longer leaves work behind** (#67). Found in production while
   verifying the change below. A request gave up after 15s with nobody online, its job stayed
   queued, and a supporter that connected moments later spent 16.1 seconds of real model time
