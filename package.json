@@ -7,8 +7,9 @@
     "secrets": "node scripts/gen-secrets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsx test/smoke.mts",
+    "test:upstash": "tsx test/upstash.mts",
     "test:e2e": "tsx test/e2e.mts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test && npm run test:upstash"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

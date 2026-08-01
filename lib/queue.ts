@@ -33,7 +33,8 @@ interface Store {
   /** Block until a job is available or maxWaitMs elapses. */
   waitPop(maxWaitMs: number): Promise<Job | null>
   setResult(id: string, text: string): Promise<void>
-  getResult(id: string): Promise<string | null>
+  /** Block until this job's answer arrives or maxWaitMs elapses. */
+  waitResult(id: string, maxWaitMs: number): Promise<string | null>
   markPresence(userId: string): Promise<void>
   isPresent(userId: string): Promise<boolean>
   countPresent(): Promise<number>
@@ -76,8 +77,26 @@ function upstashStore(url: string, token: string): Store {
         return job
       }
     },
-    setResult: async (id, text) => { await cmd(['SET', `fanout:result:${id}`, text, 'EX', RESULT_TTL_S]) },
-    getResult: async (id) => ((await cmd(['GET', `fanout:result:${id}`])) as string | null) ?? null,
+    // The answer is a one-element list rather than a plain string so the waiting
+    // caller can BRPOP it instead of polling GET twice a second.
+    setResult: async (id, text) => {
+      await cmd(['LPUSH', `fanout:result:${id}`, text])
+      await cmd(['EXPIRE', `fanout:result:${id}`, RESULT_TTL_S])
+    },
+    // Same trick as waitPop, on the other side of the relay: one blocking command
+    // per 15s of waiting instead of two GETs a second. That is what makes a long
+    // wait affordable, and a long wait is what real answers need.
+    waitResult: async (id, maxWaitMs) => {
+      const key = `fanout:result:${id}`
+      const deadline = Date.now() + maxWaitMs
+      while (true) {
+        const remaining = deadline - Date.now()
+        if (remaining <= 0) return null
+        const timeoutS = Math.max(1, Math.min(15, Math.ceil(remaining / 1000)))
+        const res = (await cmd(['BRPOP', key, timeoutS])) as [string, string] | null
+        if (res && res[1]) return res[1]
+      }
+    },
     // One command per poll: bump this node's last-seen in a sorted set. Pruning
     // and counting happen lazily in countPresent, off the hot poll path.
     markPresence: async (userId) => { await cmd(['ZADD', NODES_KEY, Date.now(), userId]) },
@@ -123,11 +142,18 @@ function memoryStore(): Store {
       }
       results.set(id, { text, at: now })
     },
-    getResult: async (id) => {
-      const r = results.get(id)
-      if (!r) return null
-      if (Date.now() - r.at > RESULT_TTL_S * 1000) { results.delete(id); return null }
-      return r.text
+    // In-process, so polling costs nothing. Reads once, matching BRPOP.
+    waitResult: async (id, maxWaitMs) => {
+      const deadline = Date.now() + maxWaitMs
+      while (true) {
+        const r = results.get(id)
+        if (r) {
+          results.delete(id)
+          if (Date.now() - r.at <= RESULT_TTL_S * 1000) return r.text
+        }
+        if (Date.now() >= deadline) return null
+        await sleep(100)
+      }
     },
     markPresence: async (userId) => { presence.set(userId, Date.now()) },
     isPresent: async (userId) => {
@@ -190,11 +216,5 @@ export async function completeJob(id: string, text: string): Promise<void> {
 
 /** Wait for a supporter's answer on behalf of the requesting user. */
 export async function awaitResult(id: string, maxWaitMs: number): Promise<string | null> {
-  const deadline = Date.now() + maxWaitMs
-  while (true) {
-    const text = await store.getResult(id)
-    if (text !== null) return text
-    if (Date.now() >= deadline) return null
-    await sleep(500)
-  }
+  return store.waitResult(id, maxWaitMs)
 }
