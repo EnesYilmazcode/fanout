@@ -9,7 +9,7 @@ import { verifyKey, bearer } from './auth'
 import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
 import { check, LIMITS, clientIp, IP_PROXY_LIMIT, rlHeaders } from './ratelimit'
-import { submitJob, awaitResult, type Job } from './queue'
+import { submitJob, awaitResult, countLive, type Job } from './queue'
 import { hasSecrets, NOT_CONFIGURED } from './config'
 
 const CORS = {
@@ -85,11 +85,19 @@ export async function listModels(req: Request): Promise<Response> {
 // capacity. Non-streaming in substance; stream:true gets the finished answer as
 // a single SSE chunk so OpenAI clients that always stream still work.
 const RELAY_PROVIDER = 'claude-code'
-// Kept safely under Vercel Edge's ~25s initial-response deadline: the relay
-// buffers (emits nothing until the answer arrives), so if this exceeded the
-// platform limit a no-supporter timeout would surface as platform 504 HTML
-// instead of our clean JSON. We return our own 504 first.
+// The buffered path emits nothing until the answer is complete, so it is bounded
+// by Vercel Edge's ~25s initial-response deadline. Exceed that and a timeout
+// surfaces as platform 504 HTML instead of our clean JSON, so we give up first.
 const RELAY_WAIT_MS = 20_000
+// The streaming path is not bounded the same way. Edge requires a response to
+// BEGIN within 25s but then allows streaming for minutes, so once the first
+// chunk is out we can wait for an answer a supporter is actually still writing.
+// Measured against production: a real headless `claude -p` on a real question
+// takes 20 to 30 seconds, which the buffered window can never fit.
+const RELAY_STREAM_WAIT_MS = 110_000
+// One wait slice, and one keepalive comment per slice. Kept at the queue's own
+// blocking cap so each slice is a single Redis command.
+const RELAY_SLICE_MS = 15_000
 const MAX_JOB_BYTES = 32 * 1024
 
 // Upper bound on the raw request body, enforced before any parse or upstream
@@ -124,41 +132,26 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
   }
 
   let id: string
-  let text: string | null
   try {
     id = await submitJob(body.model, messages)
-    text = await awaitResult(id, RELAY_WAIT_MS)
   } catch {
     // A queue-backend hiccup (e.g. transient Upstash 5xx) must not escape as a
     // bare platform 500 with no CORS or error envelope.
     return err(502, 'The relay queue is temporarily unavailable. Try again shortly.', 'api_error', headers)
   }
-  if (text === null) {
-    return err(
-      504,
-      'No supporter picked this up in time. The relay only works while a supporter is online — try again, or become one.',
-      'api_error',
-      headers,
-    )
-  }
 
   const created = Math.floor(Date.now() / 1000)
   const relayHeaders = { ...headers, 'x-fanout-provider': RELAY_PROVIDER }
 
-  if (body.stream) {
-    const chunk = {
-      id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
-      choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }],
-    }
-    const fin = {
-      id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-    }
-    const sse = `data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(fin)}\n\ndata: [DONE]\n\n`
-    return new Response(sse, {
-      headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', ...CORS, ...relayHeaders },
-    })
+  if (body.stream) return relayStream(id, body, created, relayHeaders)
+
+  let text: string | null
+  try {
+    text = await awaitResult(id, RELAY_WAIT_MS)
+  } catch {
+    return err(502, 'The relay queue is temporarily unavailable. Try again shortly.', 'api_error', headers)
   }
+  if (text === null) return err(504, await timedOutMessage(), 'api_error', headers)
 
   return new Response(
     JSON.stringify({
@@ -168,6 +161,81 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
     }),
     { headers: { 'content-type': 'application/json', ...CORS, ...relayHeaders } },
   )
+}
+
+/**
+ * Why the wait ended with nothing. "Nobody is here" and "someone is here and
+ * still writing" are different problems with opposite advice, and telling a
+ * caller to retry while a supporter is mid answer just queues the same prompt
+ * twice and spends their tokens twice.
+ */
+async function timedOutMessage(known?: boolean): Promise<string> {
+  let online = known
+  if (online === undefined) {
+    try { online = (await countLive()) > 0 } catch { online = false }
+  }
+  return online
+    ? `A supporter took this and did not finish inside ${RELAY_WAIT_MS / 1000}s. Send "stream": true and Fanout holds the connection open while they work, which is what long answers need.`
+    : 'No supporter is online right now. The relay only answers while someone is running a supporter node, so try again later, or run one yourself.'
+}
+
+/**
+ * Streaming relay. The first chunk goes out immediately, which is what buys the
+ * long wait: Edge only requires that a response START within 25s. After that we
+ * wait in slices, sending an SSE comment between them so nothing along the path
+ * decides the connection is idle.
+ */
+function relayStream(id: string, body: ChatRequest, created: number, relayHeaders: Record<string, string>): Response {
+  const encoder = new TextEncoder()
+  const frame = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`
+  const chunk = (delta: unknown, finish: string | null) => ({
+    id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
+    choices: [{ index: 0, delta, finish_reason: finish }],
+  })
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (s: string) => controller.enqueue(encoder.encode(s))
+      send(frame(chunk({ role: 'assistant' }, null)))
+
+      const deadline = Date.now() + RELAY_STREAM_WAIT_MS
+      let text: string | null = null
+      let online: boolean | undefined
+      let checked = false
+
+      while (Date.now() < deadline) {
+        const slice = Math.min(RELAY_SLICE_MS, deadline - Date.now())
+        try {
+          text = await awaitResult(id, slice)
+        } catch {
+          break
+        }
+        if (text !== null) break
+        // One presence check, after the first empty slice. If nothing is polling
+        // the queue then no answer is coming, and holding the caller for the
+        // full window would be a worse experience than the old 20s cap.
+        if (!checked) {
+          checked = true
+          try { online = (await countLive()) > 0 } catch { online = false }
+          if (!online) break
+        }
+        send(': waiting for a supporter\n\n')
+      }
+
+      if (text === null) {
+        send(frame({ error: { message: await timedOutMessage(online), type: 'api_error' } }))
+      } else {
+        send(frame(chunk({ content: text }, null)))
+        send(frame(chunk({}, 'stop')))
+      }
+      send('data: [DONE]\n\n')
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', ...CORS, ...relayHeaders },
+  })
 }
 
 export async function chatCompletions(req: Request): Promise<Response> {

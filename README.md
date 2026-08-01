@@ -50,6 +50,11 @@ const res = await fanout.chat.completions.create({
 Models are named `provider/model`, like `anthropic/claude-opus-5`, `openai/gpt-4o`, or
 `groq/llama-3.3-70b-versatile`. Use `claude-code` to go through the supporter relay instead.
 
+For `claude-code`, send `stream: true` if the answer might take a while. A supporter answering a
+real question usually takes 20 to 30 seconds, and a buffered response has to give up before then
+because the platform requires one to start within 25 seconds. Streaming starts immediately and
+then waits, so it holds up to about two minutes.
+
 ![The Fanout homepage](docs/homepage.png)
 
 ## Become a supporter

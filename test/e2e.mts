@@ -87,6 +87,9 @@ const post = (path: string, body: unknown, headers: Record<string, string> = {})
 // --- a real supporter worker, exactly as the pasted brief describes ----------
 
 let workerOn = true
+// A real supporter runs `claude -p`, which takes tens of seconds on a real
+// question. Tests set this to simulate one that outlasts the buffered window.
+let answerDelayMs = 0
 async function supporter(key: string) {
   const auth = { authorization: `Bearer ${key}`, 'x-forwarded-for': '10.0.0.1' }
   while (workerOn) {
@@ -97,6 +100,7 @@ async function supporter(key: string) {
     if (res.status !== 200) continue // 204 (no work) or 429 (backoff) -> poll again
     const job = await res.json()
     const last = job.messages.at(-1)?.content ?? ''
+    if (answerDelayMs) await new Promise((r) => setTimeout(r, answerDelayMs))
     await post('/api/work/complete', { id: job.id, text: `SUPPORTER_REPLY: ${last}` }, auth)
   }
 }
@@ -129,6 +133,10 @@ console.log('\ne2e — failure (a): claude-code with no supporter online -> clea
   t('no-supporter relay returns 504', r.status === 504, `status=${r.status}`)
   t('504 carries an OpenAI-shaped error envelope', j.error?.type === 'api_error' && typeof j.error?.message === 'string')
   t('504 body is JSON, not a platform HTML page', (r.headers.get('content-type') ?? '').includes('application/json'))
+  // With nothing polling, the message must say so. The other branch (a supporter
+  // is here but slow) is asserted further down, and giving the wrong one is how
+  // a caller gets told to retry into a supporter who is already answering.
+  t('the 504 names the real reason: nobody is online', /no supporter is online/i.test(j.error?.message ?? ''), j.error?.message)
   // The unclaimed job stays queued; the worker harmlessly drains it once started.
 }
 
@@ -194,6 +202,25 @@ const r2 = await post('/api/v1/chat/completions', {
 const sse = await r2.text()
 t('stream carries the supporter answer', sse.includes('SUPPORTER_REPLY: stream-please'))
 t('stream ends with [DONE]', sse.trimEnd().endsWith('data: [DONE]'))
+
+// The case that sent this whole change: against production, a real `claude -p`
+// answering a real question took 23.3s and the caller was cut off at 20s, so the
+// supporter spent the tokens and nobody got the answer. Streaming has to survive
+// a supporter slower than the buffered window, or the relay only works for toys.
+console.log('\ne2e — a supporter slower than the buffered window still lands (streaming)')
+answerDelayMs = 22_000
+const slowStart = Date.now()
+const r4 = await post('/api/v1/chat/completions', {
+  model: 'claude-code', stream: true, messages: [{ role: 'user', content: 'slow-please' }],
+}, clientAuth)
+const sse4 = await r4.text()
+const slowTook = Date.now() - slowStart
+answerDelayMs = 0
+t('a 22s answer still reaches the caller', sse4.includes('SUPPORTER_REPLY: slow-please'), `${slowTook}ms`)
+t('it outlasted the buffered window instead of 504ing', slowTook > 20_000, `${slowTook}ms`)
+t('the stream opened immediately rather than buffering', sse4.startsWith('data: '))
+t('keepalives held the connection while the supporter worked', sse4.includes(': waiting for a supporter'))
+t('the slow stream still terminates with [DONE]', sse4.trimEnd().endsWith('data: [DONE]'))
 
 console.log('\ne2e — bring-your-own-keys path against a fake provider')
 // Intercept only the provider endpoint; everything else uses real fetch.
