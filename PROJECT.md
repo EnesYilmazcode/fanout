@@ -72,6 +72,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 55 | Answer delivery blocks on `BRPOP` instead of polling; Upstash path covered by tests | `perf(queue)` (#58) |
 | 56 | `/api/health` caches, meters and guards its queue read | `fix(health)` (#62) |
 | 57 | Status polling slowed to 10s and paused for hidden tabs | `fix(web)` (#61) |
+| 58 | Streaming relay holds ~110s so real supporter answers arrive; honest 504 | `feat(relay)` (#59, #60) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -222,6 +223,18 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
+- **Real answers actually reach the caller now** (#59). Verified against production first: a real
+  headless `claude -p` answering a real question took 23.3s, the caller was cut off at 20s, and the
+  finished answer expired in Redis unread. The relay was demoing on toy prompts and failing at its
+  advertised job. Edge only requires a response to BEGIN within 25s, so the streaming path now
+  sends its first chunk immediately and then waits in 15s slices with SSE keepalives, up to about
+  110s. The buffered path keeps the 20s cap, because there the deadline is real.
+- **The 504 stopped blaming the wrong thing** (#60). `awaitResult` returning null was reported as
+  "no supporter picked this up", including when one had and was still writing, which told the
+  caller to retry and spend a supporter's tokens twice on the same prompt. It now checks presence
+  and says which of the two happened, and points at `stream: true` when the answer was merely slow.
+  The streaming path checks presence once after the first empty slice and gives up early when
+  nothing is polling, so an empty relay still fails fast instead of holding the caller for 110s.
 - **An open tab stopped costing 60 Upstash commands a minute** (#61). The homepage polled
   `/api/work/status` every 3 seconds, forever, including while the tab was in the background, and
   each poll is three commands (`ZSCORE`, prune, `ZCARD`). Presence has a 45s TTL, so 3s was never
