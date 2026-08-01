@@ -553,6 +553,14 @@ t('the worker script backs off instead of spinning on an error', /sleep 15/.test
 t('the worker script checks jq is present before relying on it', /command -v jq/.test(llms))
 t('the worker script always delivers an answer, even a failed one', /could not produce an answer/.test(llms))
 t('the worker script records a pid so the stop instruction works', /fanout_worker\.pid/.test(llms))
+// The board concluded both of these carry real risk for a supporter. They belong
+// where a supporter reads, not only in PROJECT.md (#72).
+t('llms.txt frames the prompt as untrusted input', /untrusted input/i.test(llms))
+t('llms.txt tells supporters to check their plan terms', /subscriptions license/i.test(llms))
+t('llms.txt offers the no-supporter alternative', /do not run a supporter node/i.test(llms))
+t('the supporter view carries the same warning', /license Claude to you for your own use/i.test(
+  readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
+))
 t('the homepage points agents at /llms.txt', readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').includes('/llms.txt'))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)

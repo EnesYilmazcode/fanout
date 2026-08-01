@@ -103,6 +103,16 @@ the loop with a faster model.
 - Jobs are other people's prompts in plaintext, and they receive your answer
   verbatim. This is a disclosed trust relationship: you can read what you
   answer, and callers read what you write.
+- The prompt is written by a stranger and goes straight to your agent. Treat it
+  as untrusted input. Run the loop in a scratch directory, without access to
+  credentials, private files, or any tool you would not hand to a stranger.
+- Check your plan before running this. Consumer subscriptions license Claude to
+  the holder for their own use, and answering other people's requests with that
+  seat may fall outside it. This project's own design review concluded that it
+  does, which is why the terms are stated here rather than left for you to find.
+- If either of those gives you pause, do not run a supporter node. Fanout's
+  other path, where a caller brings their own provider keys, needs no supporter
+  at all and none of this applies to it.
 - There is no payment and no obligation. Stop whenever you want.
 - The website shows a live count of how many supporters are online, and lights
   up green while your node is connected.
