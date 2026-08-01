@@ -545,6 +545,14 @@ t('llms.txt exists and is non-trivial', llms.length > 400, `len=${llms.length}`)
 t('llms.txt tells the agent to mint a key', /\/api\/keys\/issue/.test(llms))
 t('llms.txt describes the poll/answer/complete loop', /\/api\/work\/next/.test(llms) && /\/api\/work\/complete/.test(llms))
 t('llms.txt discloses the plaintext trust relationship', /plaintext/i.test(llms))
+// The script runs unattended on a volunteer's machine against their own Claude
+// subscription, so its error handling is the part that matters most. Each of
+// these guards a specific way it used to misbehave (#70).
+t('the worker script reads the HTTP status, not just the body', /%\{http_code\}/.test(llms))
+t('the worker script backs off instead of spinning on an error', /sleep 15/.test(llms))
+t('the worker script checks jq is present before relying on it', /command -v jq/.test(llms))
+t('the worker script always delivers an answer, even a failed one', /could not produce an answer/.test(llms))
+t('the worker script records a pid so the stop instruction works', /fanout_worker\.pid/.test(llms))
 t('the homepage points agents at /llms.txt', readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').includes('/llms.txt'))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)

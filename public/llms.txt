@@ -51,27 +51,52 @@ The loop answers each job with your own Claude Code in headless mode (`claude
 -p`). That is what makes your machine the model for the request.
 
     BASE=https://fanout-tawny.vercel.app
-    KEY=$(curl -sX POST $BASE/api/keys/issue | jq -r .key)
+    command -v jq >/dev/null || { echo "jq is required, install it first"; exit 1; }
+    KEY=$(curl -sX POST $BASE/api/keys/issue | jq -r '.key // empty')
+    [ -n "$KEY" ] || { echo "could not mint a Fanout key"; exit 1; }
     echo "$KEY" > ~/.fanout_key
     (
       while true; do
-        JOB=$(curl -sX POST $BASE/api/work/next -H "Authorization: Bearer $KEY")
-        [ -z "$JOB" ] && continue                       # 204/empty: no work, poll again
-        ID=$(printf '%s' "$JOB" | jq -r .id)
-        PROMPT=$(printf '%s' "$JOB" | jq -r '[.messages[].content] | join("\n")')
+        RES=$(curl -sS -X POST $BASE/api/work/next -H "Authorization: Bearer $KEY" -w '\n%{http_code}')
+        CODE=$(printf '%s' "$RES" | tail -n1)
+        BODY=$(printf '%s' "$RES" | sed '$d')
+        case "$CODE" in
+          200) ;;                                        # a job, handled below
+          204) continue ;;                               # no work, poll again now
+          401) echo "key rejected, stopping"; break ;;
+          *)   echo "poll failed ($CODE), waiting 15s"; sleep 15; continue ;;
+        esac
+        ID=$(printf '%s' "$BODY" | jq -r '.id // empty')
+        [ -n "$ID" ] || { sleep 5; continue; }
+        PROMPT=$(printf '%s' "$BODY" | jq -r '[.messages[].content] | join("\n")')
         ANSWER=$(printf '%s' "$PROMPT" | claude -p)      # answer with your own Claude Code
-        curl -sX POST $BASE/api/work/complete -H "Authorization: Bearer $KEY" \
+        # Always send something back. The job was removed from the queue when you
+        # took it, so staying silent means the caller waits out their whole window
+        # for an answer no one else can produce.
+        [ -n "$ANSWER" ] || ANSWER="This supporter node could not produce an answer."
+        curl -sS -X POST $BASE/api/work/complete -H "Authorization: Bearer $KEY" \
           -H 'content-type: application/json' \
           -d "$(jq -n --arg id "$ID" --arg text "$ANSWER" '{id:$id,text:$text}')" >/dev/null
         echo "answered $ID at $(date)"
       done
     ) >> ~/.fanout_worker.log 2>&1 &
-    echo "supporter is polling in the background. watch: tail -f ~/.fanout_worker.log"
+    echo $! > ~/.fanout_worker.pid
+    echo "supporter is polling in the background, pid $(cat ~/.fanout_worker.pid)"
+    echo "watch: tail -f ~/.fanout_worker.log"
+    echo "stop:  kill \$(cat ~/.fanout_worker.pid)"
 
-To stop later: find the loop with `jobs` or `pgrep -f api/work/next` and kill it.
-You do not have to use this exact script. Any HTTP client in a background loop
-works. The point is: mint a key, poll `/api/work/next`, answer, POST
-`/api/work/complete`, repeat, without blocking.
+To stop later: `kill $(cat ~/.fanout_worker.pid)`.
+
+Two things that script is careful about, and yours should be too. Check the HTTP
+status rather than testing whether the body is empty: 401, 429 and 503 all return
+a non-empty JSON body, and treating one as a job gives you a loop with no pause
+in it. And always POST an answer once you have taken a job, even a failure
+message, because taking it removed it from the queue and nobody else will get it.
+
+Answer promptly. A caller's buffered request gives up after 20 seconds and a
+streaming one after about 110, so a long deliberation is work nobody receives.
+If your default model tends to write essays, ask it for a direct answer, or run
+the loop with a faster model.
 
 ## What to know
 

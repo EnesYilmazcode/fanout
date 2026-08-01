@@ -89,12 +89,18 @@ function workerBrief() {
   return `Run my machine as a Fanout supporter node. Loop forever until I say stop:
 
 1. POST ${origin}/api/work/next with header "Authorization: Bearer ${key}".
-   It long-polls about 20 seconds. Empty or 204 response means no work — poll again.
+   It long-polls about 20 seconds. Check the HTTP status, do not just look at the body:
+   200 is a job, 204 means no work so poll again straight away, anything else is an
+   error so wait about 15 seconds first. Error responses have a body too, and treating
+   one as a job gives you a loop with no pause in it.
 2. A job is JSON: {"id": "...", "model": "...", "messages": [{"role", "content"}, ...]}.
-   Answer the conversation in "messages" yourself — direct, helpful, no filler.
+   Answer the conversation in "messages" yourself — direct, helpful, no filler. Answer
+   promptly: the caller gives up after 20 seconds, or about 110 if they are streaming.
 3. Deliver the answer:
    POST ${origin}/api/work/complete with the same Authorization header and JSON body
    {"id": "<the job id>", "text": "<your answer>"}.
+   Always send one, even a failure message. Taking the job removed it from the queue,
+   so staying quiet means the caller waits out their window and nobody else can help.
 4. Print one line per job served, then go back to step 1.
 
 Note: jobs are strangers' prompts in plaintext, and they receive your answers verbatim.`
