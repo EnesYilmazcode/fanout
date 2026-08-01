@@ -20,8 +20,31 @@ const CORS = {
 
 // Each poll holds the function open for up to POLL_WINDOW_MS, so the limit can
 // be modest: 12/min per source is continuous coverage with headroom to spare.
-const POLL_WINDOW_MS = 20_000
+//
+// The window matches the queue's own blocking cap on purpose. At 20s it took two
+// BRPOPs (15s then 5s) to cover one poll, which quietly doubled the cost of the
+// only thing this project pays for continuously. 15s is one command per poll and
+// still well under the Edge deadline.
+const POLL_WINDOW_MS = 15_000
 const IP_POLL_LIMIT = 12
+
+// Presence has a 45s TTL, so heartbeating on every poll is mostly waste. Skip the
+// write if this instance saw the same node recently. A cold instance always beats,
+// so presence is never late, and the degenerate case (every poll landing on a
+// different instance) is exactly what the code did before.
+const HEARTBEAT_MS = 30_000
+const lastBeat = new Map<string, number>()
+
+function shouldBeat(userId: string): boolean {
+  const now = Date.now()
+  const prev = lastBeat.get(userId)
+  if (prev !== undefined && now - prev < HEARTBEAT_MS) return false
+  if (lastBeat.size > 1_000) {
+    for (const [k, at] of lastBeat) if (now - at > HEARTBEAT_MS * 2) lastBeat.delete(k)
+  }
+  lastBeat.set(userId, now)
+  return true
+}
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
@@ -49,7 +72,7 @@ export default async function handler(req: Request): Promise<Response> {
   // not this particular poll returns a job. This is what /api/work/status reads
   // so the site can light up "connected" the moment the worker loop starts.
   try {
-    await markLive(auth.u)
+    if (shouldBeat(auth.u)) await markLive(auth.u)
 
     const job = await nextJob(POLL_WINDOW_MS)
     if (!job) return new Response(null, { status: 204, headers: { ...CORS, ...rlh } })

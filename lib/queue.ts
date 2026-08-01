@@ -62,9 +62,12 @@ function upstashStore(url: string, token: string): Store {
     // object. If a supporter popped it a moment ago this removes nothing, which
     // is the correct outcome.
     remove: async (job) => { await cmd(['LREM', QUEUE_KEY, 1, JSON.stringify(job)]) },
-    // BRPOP blocks server-side for up to `timeout` seconds, so one idle poll is
-    // ONE Redis command instead of ~20 RPOP+sleep round-trips. This is the
-    // difference between a supporter costing ~4k and ~100k commands/day.
+    // BRPOP blocks server-side, so an idle poll is one Redis command instead of
+    // ~20 RPOP+sleep round-trips. The 15s cap is why api/work/next polls for 15s
+    // and not 20: a longer window would need a second BRPOP to cover the tail,
+    // and this is the only cost the project pays continuously. With the throttled
+    // heartbeat that is about 6 commands a minute per idle supporter, roughly
+    // 259K a month, against a 500K free tier. Two supporters do not fit.
     waitPop: async (maxWaitMs) => {
       const deadline = Date.now() + maxWaitMs
       while (true) {

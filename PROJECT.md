@@ -76,6 +76,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 59 | A caller that gives up withdraws its job instead of leaving it queued | `fix(relay)` (#67) |
 | 60 | Supporter worker loop handles error statuses, backs off, always answers | `fix(supporter)` (#70) |
 | 61 | Supporter-side risks (untrusted prompts, plan terms) shown where supporters start | `docs` (#72) |
+| 62 | Poll window aligned to the BRPOP cap, heartbeat throttled, cost model corrected | `perf(relay)` (#74) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -217,6 +218,9 @@ Honest list. None of these are bugs; all are consequences of choices above.
   regions. It protects Fanout's invocation quota, not anyone's provider spend.
 - **A leaked key is valid until it expires** (90 days). See revocation in Icebox.
 - **Rotating either secret invalidates everything** signed or sealed under it.
+- **The relay fits about one continuous supporter on Upstash free.** An idle supporter node costs
+  roughly 6 Redis commands a minute (one blocking poll plus a throttled heartbeat), about 259K a
+  month against a 500K free tier. This is a real ceiling on the public relay, not a rounding error.
 - **Bandwidth is paid twice per request** â€” in from the provider, out to the caller. On a proxy
   that caps throughput well before invocation count does.
 
@@ -226,6 +230,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
+- **The cost model was wrong by 3x, and is now right** (#74). The code comment and this board both
+  claimed one Redis command per supporter poll window. `POLL_WINDOW_MS` was 20s while `waitPop`
+  caps each blocking call at 15s, so every window issued two BRPOPs, plus a heartbeat ZADD on every
+  poll that presence's 45s TTL never needed. Real cost was 3 commands per 20s, about 13k a day,
+  roughly 78% of the whole 500K monthly free tier for a single idle supporter. The window now
+  matches the blocking cap so a poll is one BRPOP, and the heartbeat fires at most every 30s.
+  About 6 commands a minute now, 259K a month. Worth stating plainly rather than burying: even
+  fixed, two continuously running supporters do not fit on the free tier.
 - **Supporters can now see the risks this board already recorded** (#72). The Resolved section
   says subscription auth is licensed for the holder's own use and that every supporter node would
   risk a ban. That was written here and nowhere a supporter could read it, while the homepage asked
