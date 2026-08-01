@@ -1,11 +1,12 @@
-﻿# Fanout â€” project board
+# Fanout — project board
 
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
 
-**Status:** deployed and verified live â€” sharing-model question resolved, see Decision log
+**Status:** deployed, and the relay is now verified end to end on production rather than only in
+local tests. One open question needs a decision from the owner: see P0 in Next.
 **Live URL:** https://fanout-tawny.vercel.app
-**Last updated:** 2026-07-31
+**Last updated:** 2026-08-01
 
 ---
 
@@ -15,28 +16,28 @@ stale relative to the code. Newest entries at the top of each log.
 
 | # | Item | Commit |
 |---|---|---|
-| 1 | Repo scaffold â€” TypeScript, Edge config, secret generator | `chore: scaffold` |
+| 1 | Repo scaffold — TypeScript, Edge config, secret generator | `chore: scaffold` |
 | 2 | Self-verifying HMAC API keys, no user table | `feat(auth)` |
 | 3 | AES-256-GCM sealed connections bound to owner id | `feat(seal)` |
 | 4 | Provider adapters: Anthropic, OpenAI, Groq | `feat(providers)` |
-| 5 | Anthropic SSE â†’ OpenAI chunk stream translation | `feat(providers)` |
+| 5 | Anthropic SSE → OpenAI chunk stream translation | `feat(providers)` |
 | 6 | Per-instance sliding-window rate limiter | `feat(ratelimit)` |
 | 7 | Key issue + connect endpoints | `feat(api)` |
 | 8 | Proxy with connection pooling and failover | `feat(api)` |
 | 9 | Landing page with live 3-step demo | `feat(web)` |
 | 10 | README, integration snippets, this board | `docs` |
-| 11 | Committed test suite â€” `npm test` | `test` |
-| 12 | Deployed to production, GitHub auto-deploy connected | â€” |
+| 11 | Committed test suite — `npm test` | `test` |
+| 12 | Deployed to production, GitHub auto-deploy connected | — |
 | 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
-| 14 | Adversarial security review of the live deployment | â€” |
+| 14 | Adversarial security review of the live deployment | — |
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
-| 16 | `X-Fanout-Pool-Health` header â€” per-connection outcomes on every response | `feat(api)` |
-| 17 | Static setup page â€” mint, seal, one copyable config block, strict CSP | `feat(web)` |
-| 18 | Homepage redesign â€” light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
-| 19 | Supporter relay â€” `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
-| 20 | Supporter presence â€” node heartbeat + `/api/work/status`, live "connected" light | `feat(relay)` |
+| 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
+| 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
+| 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
+| 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
+| 20 | Supporter presence — node heartbeat + `/api/work/status`, live "connected" light | `feat(relay)` |
 | 21 | Live "N supporters online" count on both views (global presence) | `feat(relay)` |
-| 22 | Relay hardening â€” 7 findings from adversarial review fixed | `fix(relay)` |
+| 22 | Relay hardening — 7 findings from adversarial review fixed | `fix(relay)` |
 | 23 | CI (GitHub Actions runs `npm run check`) + `CLAUDE.md` working notes | `chore` |
 | 24 | Human README with screenshot and diagram | `docs` (#8) |
 | 25 | Demo page wording cleanup | `#9` |
@@ -44,7 +45,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 27 | Token usage in streaming responses | `feat(providers)` (#11) |
 | 28 | `/api/health` reports queue backend + supporters online | `feat` (#12) |
 | 29 | Rate-limit headers on `/api/work/*` | `feat(relay)` (#13) |
-| 30 | End-to-end HTTP integration test â€” `npm run test:e2e` | `test` (#15) |
+| 30 | End-to-end HTTP integration test — `npm run test:e2e` | `test` (#15) |
 | 31 | Dead-code sweep (unused exports demoted) | `refactor` (#21) |
 | 32 | Defensive error wrappers on key + connect endpoints | `fix` (#22) |
 | 33 | README polish + supporter walkthrough | `docs` (#23) |
@@ -80,33 +81,33 @@ stale relative to the code. Newest entries at the top of each log.
 
 ### Resolved: Fanout is a personal capacity router
 
-The parked P0 â€” personal router or marketplace â€” was put to a five-perspective design review
+The parked P0 — personal router or marketplace — was put to a five-perspective design review
 on 2026-07-30 (full report: `docs/design/2026-07-30-dashboard-panel.md`). The verdict was
 unanimous: **personal capacity router.** Both supporter mechanisms are dead as proposed:
 
 - **Key deposit (marketplace):** *killed*, not deferred. The target seller (Claude Max, Cursor,
-  Copilot) has no API key to deposit â€” those products auth over OAuth and prohibit credential
+  Copilot) has no API key to deposit — those products auth over OAuth and prohibit credential
   sharing; a console key is pay-per-token, so depositing one is donating money at cost; and
   serving a stranger's key requires deleting the AAD owner-binding, converting
   `MASTER_ENCRYPTION_KEY` into a vault of other people's credentials.
 - **Claude Code worker relay:** the machinery is real (headless `claude -p`, long-lived OAuth
   tokens, a small polling loop) but subscription auth is licensed for the holder's own use and
-  Anthropic explicitly enforces against it in third-party services â€” every supporter node would
+  Anthropic explicitly enforces against it in third-party services — every supporter node would
   risk a ban. It also cannot fit Vercel Hobby function lifetimes or Upstash's free tier.
-  Salvage: **self-relay** â€” your own idle machine serving your own pool â€” as a future mode of
+  Salvage: **self-relay** — your own idle machine serving your own pool — as a future mode of
   the npm package.
 
 What replaces "supporters": sharing with people you know goes through the provider, not through
-Fanout â€” invite them into your Anthropic/OpenAI organization so they hold their own key and seal
+Fanout — invite them into your Anthropic/OpenAI organization so they hold their own key and seal
 their own blob. That is the one sharing mechanism provider terms are built to permit.
 
 ### Future products (explicitly separate, each with its real cost)
 
 Not features of this codebase. If either is ever pursued, it is a new commitment:
 
-- **Donation credit pool** ("Patreon for inference") â€” legally clean; requires commercial
+- **Donation credit pool** ("Patreon for inference") — legally clean; requires commercial
   hosting (Vercel Pro), a datastore for accounting, per-user caps, and an abuse pipeline.
-- **Open-model volunteer network** ("BOINC for open weights") â€” supporters host Ollama/vLLM;
+- **Open-model volunteer network** ("BOINC for open weights") — supporters host Ollama/vLLM;
   fixes licensing entirely, but needs a persistent broker, paid hosting, and a disclosed
   plaintext trust model. Effectively a re-platforming that reuses the adapter pattern.
 
@@ -114,23 +115,23 @@ Not features of this codebase. If either is ever pursued, it is a new commitment
 
 | Priority | Item | Why |
 |---|---|---|
-| P1 | End-to-end test with a **real** provider key | The live chain reaches Anthropic and gets a genuine `request_id` back, but no successful completion has been produced yet. Must land before promoting the setup page |
-| P1 | GitHub OAuth key recovery | Deterministic re-mint from `HMAC(master_secret, github_id)` â€” additive, never a gate, zero storage. Covers the lost-key-orphans-blobs failure the setup page's backup button only mitigates |
+| P0 | **Decide the relay's direction** ([#76](https://github.com/EnesYilmazcode/fanout/issues/76)) | This board says the supporter relay is dead on terms grounds. The homepage leads with it. The measurements that were missing are now attached to the issue: the free tier fits about one supporter, and real answers ranged from 4s to 283s against a 110s ceiling |
+| P1 | End-to-end test with a **real** provider key | The largest unverified claim in the repo. The live chain reaches Anthropic and returns a real `request_id`, but no successful completion has ever come back, and `test/e2e.mts` mocks the upstream, so the Anthropic response parsing is only ever checked against a fake written from the docs. One minute and about two cents: `node scripts/verify-provider.mjs` |
 | P1 | npm client package | Mint/seal/compose-config from the terminal, mirroring the setup page. Design so a self-relay mode can be added later |
 | P2 | Retry budget per request | One bad pool of 8 blobs currently costs 8 upstream calls |
-| P2 | Token usage in streaming responses | Anthropic sends `message_delta.usage`; currently dropped |
-| P2 | Record the demo clip for the post | Failover across your own providers â€” show two keys, kill one |
+| P2 | Record the demo clip for the post | Failover across your own providers — show two keys, kill one |
+| P3 | GitHub OAuth key recovery | **Demoted 2026-08-01.** Its stated justification does not survive the code. The reason given was that a lost key orphans every AAD-bound blob, but user ids are generated randomly at mint time (`api/keys/issue.ts`, `${clean}_${randomUUID}`) and blobs are sealed to that id, so an OAuth-derived id is a different id and opens none of them. It could only help someone who arrived through OAuth on their first ever mint, and there are none. The mechanism stays pre-agreed if identity is ever forced |
 
 ### Icebox
 
 Deliberately not built. Each one trades away the no-database property, which is the point of the
-project â€” revisit only if this stops being a demo.
+project — revisit only if this stops being a demo.
 
-- **Key revocation** â€” needs a denylist. Vercel Edge Config is the cheapest place if ever needed.
-- **Distributed rate limiting** â€” needs Upstash. Current limiter is per-instance and approximate.
-- **Listing your connections** â€” impossible by construction; the client holds the only copy.
-- **Connection rotation** â€” would need a `kid` prefix on blobs to accept two key generations.
-- **More providers** â€” trivial to add, but each is ongoing maintenance as its API drifts.
+- **Key revocation** — needs a denylist. Vercel Edge Config is the cheapest place if ever needed.
+- **Distributed rate limiting** — needs Upstash. Current limiter is per-instance and approximate.
+- **Listing your connections** — impossible by construction; the client holds the only copy.
+- **Connection rotation** — would need a `kid` prefix on blobs to accept two key generations.
+- **More providers** — trivial to add, but each is ongoing maintenance as its API drifts.
 
 ---
 
@@ -138,9 +139,9 @@ project â€” revisit only if this stops being a demo.
 
 Why things are the way they are, so a future change doesn't quietly undo a deliberate choice.
 
-**2026-07-30 Â· Personal capacity router, not a marketplace.**
+**2026-07-30 · Personal capacity router, not a marketplace.**
 Settled by a five-perspective design review (`docs/design/2026-07-30-dashboard-panel.md`).
-The marketplace lost independently on four grounds â€” terms (credential sharing and subscription
+The marketplace lost independently on four grounds — terms (credential sharing and subscription
 relay are both prohibited by every relevant provider), economics (nothing depositable has idle
 headroom), security (it requires deleting the AAD owner-binding), and infrastructure (relay
 cannot fit Vercel Hobby or Upstash free tiers). Any one would have sufficed. The AAD
@@ -148,25 +149,25 @@ owner-binding stays. The "dashboard" shipped as a static no-login setup page for
 reason: minting is unauthenticated, so a login would gate nothing; identity arrives later, if
 ever, as optional OAuth key *recovery*, not as a gate.
 
-**2026-07-28 Â· No database, by construction.**
+**2026-07-28 · No database, by construction.**
 Vercel's free tier has no first-party datastore, and the two things a datastore would buy
 (revocation, exact quotas) are not needed for a demo. Keys became HMAC signatures over their own
 payload; connections became AES-GCM blobs the client stores. The cost is listed in Icebox above,
 and it is an accepted cost, not an oversight.
 
-**2026-07-28 Â· OpenAI wire format as the canonical API.**
+**2026-07-28 · OpenAI wire format as the canonical API.**
 Every client SDK already speaks it, so integration is a `baseURL` change instead of a package
 anyone has to install. Translation happens only on the outbound side, per adapter.
 
-**2026-07-28 Â· Edge runtime, plain `fetch`, zero runtime dependencies.**
+**2026-07-28 · Edge runtime, plain `fetch`, zero runtime dependencies.**
 No cold starts, native streaming, and WebCrypto covers both HMAC and AES-GCM. Bundling three
 provider SDKs would blow the Edge size limit and buy nothing over `fetch`. Zero dependencies also
 shrinks the supply-chain surface, which matters because `MASTER_ENCRYPTION_KEY` decrypts every
 outstanding connection.
 
-**2026-07-28 Â· Explicit route files, not a catch-all. _(reversed an earlier decision)_**
+**2026-07-28 · Explicit route files, not a catch-all. _(reversed an earlier decision)_**
 The original design used one `api/v1/[...path].ts` to conserve function count. It 404'd in
-production for any path deeper than one segment â€” `/api/v1/models` resolved, but
+production for any path deeper than one segment — `/api/v1/models` resolved, but
 `/api/v1/chat/completions` did not, which is the entire product. Vercel's zero-config `api/`
 directory matches a single segment for `[...param]`.
 
@@ -175,23 +176,23 @@ HTTP request against the deployment revealed it. Worth remembering: a successful
 nothing about whether a route resolves. Shared logic now lives in `lib/gateway.ts` with thin
 route files, at five functions total.
 
-**2026-07-28 Â· Connection blobs are bound to the owner as AES-GCM additional data.**
+**2026-07-28 · Connection blobs are bound to the owner as AES-GCM additional data.**
 Without this, a blob scraped from someone else's browser would spend their credits. With it,
 decryption fails outright for anyone but the issuing user.
 
-**2026-07-28 Â· Pool starts at a random offset, not index 0.**
+**2026-07-28 · Pool starts at a random offset, not index 0.**
 Otherwise the first connection in the header absorbs all traffic and the rest are dead weight.
 
 ---
 
-## Security review â€” 2026-07-28
+## Security review — 2026-07-28
 
 An adversarial pass was run against the live deployment: 14 key-forgery variants, 9 blob-isolation
 attacks, secret-leakage scans with a planted sentinel key, SSRF probes, and amplification testing.
 
-**The cryptographic model held.** Every forgery attempt was rejected â€” payload swapping with a kept
-signature, tier escalation `free â†’ pro`, key-version bumps, expiry tampering, single-byte flips in
-payload and signature. Every blob-isolation attack was rejected â€” cross-user replay, byte flips in
+**The cryptographic model held.** Every forgery attempt was rejected — payload swapping with a kept
+signature, tier escalation `free → pro`, key-version bumps, expiry tampering, single-byte flips in
+payload and signature. Every blob-isolation attack was rejected — cross-user replay, byte flips in
 the IV, ciphertext and GCM tag, truncation, IV swapping, cross-provider confusion. The planted
 provider key never appeared in any response body or header, including on error paths. Endpoints are
 hardcoded per adapter, so the model string offers no SSRF surface.
@@ -201,11 +202,11 @@ hardcoded per adapter, so the model string offers no SSRF surface.
 | Severity | Issue | Fix |
 |---|---|---|
 | HIGH | Uncapped fan-out. Failover walks the pool serially and nothing bounded its length; ~140 blobs fit under Vercel's 32KB header limit, turning one request into ~140 upstream calls and ~20s of function time. | `MAX_POOL = 8`, rejected with 400 above it. Verified: 100 blobs now returns 400 in ~1s with zero upstream calls. |
-| MEDIUM | Rate limits keyed only on user id, while minting a key is unauthenticated and free â€” so hitting a limit was answered by taking a fresh key and a fresh bucket. | Limits now also apply per source IP, on both minting and the proxy. Verified: minting cuts off after ~10 per source. |
+| MEDIUM | Rate limits keyed only on user id, while minting a key is unauthenticated and free — so hitting a limit was answered by taking a fresh key and a fresh bucket. | Limits now also apply per source IP, on both minting and the proxy. Verified: minting cuts off after ~10 per source. |
 | LOW | The connection label is echoed into a response header and accepted CRLF. Only reachable on the upstream-success path, so never confirmed live. | Stripped to printable ASCII at seal time. |
 
 Worth stating plainly: the IP dimension does **not** stop a distributed caller, and is not meant to.
-It closes the trivial single-source bypass. Real enforcement needs shared state â€” see Icebox.
+It closes the trivial single-source bypass. Real enforcement needs shared state — see Icebox.
 
 ---
 
@@ -221,12 +222,35 @@ Honest list. None of these are bugs; all are consequences of choices above.
 - **The relay fits about one continuous supporter on Upstash free.** An idle supporter node costs
   roughly 6 Redis commands a minute (one blocking poll plus a throttled heartbeat), about 259K a
   month against a 500K free tier. This is a real ceiling on the public relay, not a rounding error.
-- **Bandwidth is paid twice per request** â€” in from the provider, out to the caller. On a proxy
+- **Bandwidth is paid twice per request** — in from the provider, out to the caller. On a proxy
   that caps throughput well before invocation count does.
 
 ---
 
 ## Changelog
+
+### 2026-08-01 (board accuracy, and a repair)
+
+- **The board was stale, which this document specifically promises not to be.** Its first paragraph
+  says it is updated in the same commit as the change it describes. One of six open items,
+  "Token usage in streaming responses", was already shipped as board item 27 and is asserted in the
+  smoke suite. Removed. A checkable claim in the opening line that fails on inspection costs more
+  than the row was worth.
+- **GitHub OAuth key recovery demoted from P1 to P3.** Its justification does not survive the code.
+  The reason given was that a lost key orphans every AAD-bound blob, but user ids are random per
+  mint (`api/keys/issue.ts`) and blobs are sealed to that id, so an OAuth-derived id opens none of
+  them. It could only ever help someone who arrived through OAuth on their first mint.
+- **`scripts/verify-provider.mjs` added** so the oldest P1 is one command instead of a project.
+  It mints, seals, and runs a real non-streaming and streaming completion against a live provider,
+  checking the answer, the usage translation, the pool-health header, and the streamed reassembly.
+  Run with a bogus key it already proves the chain reaches Anthropic and returns a real
+  `request_id`; it needs a funded key to finish the job.
+- **Encoding repaired.** Earlier edits in this session went through Windows PowerShell, which read
+  this file as ANSI and wrote it back as UTF-8, turning every em dash into mojibake and adding a
+  BOM. 76 characters across the file were mangled. Repaired and verified against the pre-session
+  blob: 57 em dashes, 9 arrows, 7 middots and one each of the rest, exactly as before. Worth
+  recording as a note to self: edit files here with a UTF-8 aware tool, not `Get-Content` piped
+  into `Set-Content`.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
@@ -330,7 +354,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
   as a background shell and answer each job with headless `claude -p`; the supporter view leads
   with the global "N supporters online" count (the one-liner mints its own key, so the browser's
   per-key connected light never fires). **Reminder made concrete:** the count and the relay only
-  work in production once `UPSTASH_REDIS_REST_URL`/`_TOKEN` are set â€” Vercel's serverless
+  work in production once `UPSTASH_REDIS_REST_URL`/`_TOKEN` are set — Vercel's serverless
   instances do not share the in-memory fallback, so a supporter and the site land on different
   instances. This is the founder's next setup step (Upstash free tier), not a code change.
 
@@ -342,7 +366,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
   supporter view leads with the copyable one-liner; the full manual brief is a collapsible
   fallback. Homepage links agents at `/llms.txt`.
 
-### 2026-07-30 (overnight â€” sixth fleet)
+### 2026-07-30 (overnight — sixth fleet)
 
 - **Sixth parallel fleet** (issues #48-#49, PRs #50-#51): the e2e test now also covers the
   hardened failure modes over real HTTP (no-supporter 504, oversized-body 400, cross-key blob
@@ -353,7 +377,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
   founder (the two "future products") or need a real funded provider key (the last unverified
   link). The heartbeat stays armed for periodic checks rather than manufacturing busywork.
 
-### 2026-07-30 (overnight â€” fifth fleet)
+### 2026-07-30 (overnight — fifth fleet)
 
 - **Fifth parallel fleet** (issues #42-#44, PRs #45-#47): the end-to-end test now runs in CI, a
   `SECURITY.md` states the reporting route (GitHub private advisory), scope, and honest limits,
@@ -361,14 +385,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
   secret is missing instead of a generic 500. The maintainer's personal email was kept out of the
   public SECURITY.md by choice.
 
-### 2026-07-30 (overnight â€” fourth fleet)
+### 2026-07-30 (overnight — fourth fleet)
 
 - **Fourth parallel fleet** (issues #34-#37, PRs #38-#41): a branded 404 page, auth edge-case
   tests (expiry enforcement, payload-swap rejection, junk-bearer handling, tier preservation),
   a concise `docs/ARCHITECTURE.md`, and a `commit` field on `/api/health` from
   `VERCEL_GIT_COMMIT_SHA` so you can confirm which build is live.
 
-### 2026-07-30 (overnight â€” third fleet)
+### 2026-07-30 (overnight — third fleet)
 
 - **Third parallel fleet** (issues #26-#29, PRs #30-#33): `vercel.json` with security headers
   (nosniff, no-referrer, DENY framing, locked-down Permissions-Policy) and immutable caching for
@@ -376,7 +400,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
   coverage for the OpenAI and Groq adapters; and a request body size cap on the proxy path so an
   oversized payload is rejected with a clean 400 before any upstream call.
 
-### 2026-07-30 (overnight â€” end-to-end test + second fleet)
+### 2026-07-30 (overnight — end-to-end test + second fleet)
 
 - **End-to-end HTTP test** (#15, `npm run test:e2e`): boots the real handlers on a local server
   and drives a full supporter round trip over HTTP (a real worker loop polls, answers, and the
@@ -389,7 +413,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 - Continuous overnight loop runs from the main session (GitHub tools + Workflow engine); the
   hourly cron is disabled while it runs to avoid two workers racing.
 
-### 2026-07-30 (parallel fleet â€” six PRs)
+### 2026-07-30 (parallel fleet — six PRs)
 
 Worked as parallel teams: six issues (#2-#7) opened at once, each implemented on its own
 branch by an isolated agent, reviewed by a separate agent, and merged as PRs #8-#13.
@@ -415,16 +439,16 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 - **Adversarial review of the relay, 7 confirmed findings fixed** (full run archived under the
   session; verified against source before fixing):
   1. Uncaught exceptions in the relay path returned a bare Edge 500 with no CORS/OpenAI envelope
-     â†’ whole handler wrapped, queue errors become a clean 502, null/again message elements coerced.
-  2. `flatten()` silently relayed an empty prompt for text-less content â†’ rejected with 400.
-  3â€“4. 25s relay wait raced Vercel Edge's ~25s deadline (platform 504 HTML) and 504'd healthy
-     relays â†’ `RELAY_WAIT_MS` cut to 20s, safely under the deadline, returns our own clean 504.
-  5. In-memory job queue grew unbounded with no supporter polling â†’ age-trim + `MAX_QUEUE` cap
+     → whole handler wrapped, queue errors become a clean 502, null/again message elements coerced.
+  2. `flatten()` silently relayed an empty prompt for text-less content → rejected with 400.
+  3–4. 25s relay wait raced Vercel Edge's ~25s deadline (platform 504 HTML) and 504'd healthy
+     relays → `RELAY_WAIT_MS` cut to 20s, safely under the deadline, returns our own clean 504.
+  5. In-memory job queue grew unbounded with no supporter polling → age-trim + `MAX_QUEUE` cap
      on push (both stores).
-  6. Memory results map leaked â†’ opportunistic sweep.
-  7. Upstash busy-poll (~100k commands/day per idle supporter) â†’ **BRPOP** blocking pop (one
-     command per poll window) and one-command presence heartbeat. ~25Ã— cheaper.
-- **CI**: `.github/workflows/ci.yml` runs `npm run check` on every push to main and every PR â€”
+  6. Memory results map leaked → opportunistic sweep.
+  7. Upstash busy-poll (~100k commands/day per idle supporter) → **BRPOP** blocking pop (one
+     command per poll window) and one-command presence heartbeat. ~25× cheaper.
+- **CI**: `.github/workflows/ci.yml` runs `npm run check` on every push to main and every PR —
   the gate for the overnight autonomous improvement loop. Added `CLAUDE.md` working notes.
 - Smoke suite now 50 assertions (relay guards, presence, global count).
 
@@ -432,10 +456,10 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 
 - **Live connection detection.** Each `/api/work/next` poll now heartbeats the node (keyed by
   Fanout user id, ~45s TTL); new `GET /api/work/status` reports whether the caller's own node is
-  live. The supporter view polls it every 3s and flips from "Waiting for your node to connectâ€¦"
-  to a green "Connected â€” your machine is answering requests" the moment the pasted worker loop
-  starts. Polling stops when the view is left. Presence is per-key â€” no cross-user visibility.
-  Four new smoke assertions (39 total) plus browser coverage of the offlineâ†’online transition.
+  live. The supporter view polls it every 3s and flips from "Waiting for your node to connect…"
+  to a green "Connected — your machine is answering requests" the moment the pasted worker loop
+  starts. Polling stops when the view is left. Presence is per-key — no cross-user visibility.
+  Four new smoke assertions (39 total) plus browser coverage of the offline→online transition.
 - Supporter brief reworded to "Paste this into Claude Code or Codex."
 
 ### 2026-07-30 (relay + centered homepage)
@@ -445,7 +469,7 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
   `POST /api/work/next` (supporter long-poll) and `POST /api/work/complete` (deliver). A user's
   `claude-code` request submits a job and waits up to 25s for a supporter's answer, returned
   OpenAI-shaped (streaming supported as a single chunk). Jobs carry only model + flattened
-  messages â€” no requester id or IP; the job UUID is the completion capability. Eight new smoke
+  messages — no requester id or IP; the job UUID is the completion capability. Eight new smoke
   assertions cover the full round-trip (35 total).
 - **Homepage rebuilt to the centered two-mode spec**: title centered, a single key box with
   regenerate on the left and a copy icon on the right, and a top-right toggle to the supporter
@@ -457,12 +481,12 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
   is the supporter's own ToS risk, disclosed where the worker starts. The earlier review killed
   the relay *as an anonymous marketplace*; this is the founder's explicit direction to ship it
   as a free, opt-in supporter network. The AAD owner-binding on provider connections is
-  untouched â€” the relay is a separate path that needs no blobs.
+  untouched — the relay is a separate path that needs no blobs.
 
 ### 2026-07-30 (later)
 
 - **Homepage redesigned to founder's spec**: light mode, minimal, key-first. The page now IS
-  the product surface â€” a key auto-mints on first visit, with Copy and Regenerate, a compact
+  the product surface — a key auto-mints on first visit, with Copy and Regenerate, a compact
   provider row (kept because a Fanout key routes nothing without at least one sealed provider
   key), the copyable config block doubling as the API docs, and backup/restore as footer
   links. Regenerate warns and clears sealed providers, since blobs only decrypt under the key
@@ -475,10 +499,10 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
   full report committed to `docs/design/2026-07-30-dashboard-panel.md`. Marketplace framing
   removed from the board, the landing page, and the package description; future products
   (donation pool, open-model volunteer network) recorded separately with their real costs.
-- **Setup page shipped** at `/setup.html` â€” mint, seal, and one copyable config block
+- **Setup page shipped** at `/setup.html` — mint, seal, and one copyable config block
   (env / curl / Python / JS), localStorage-backed with download/restore backup, strict CSP,
   no login and no backend changes. Verified in a real browser under the CSP: 12 checks.
-- **`X-Fanout-Pool-Health` response header** â€” every attempt's outcome in walk order
+- **`X-Fanout-Pool-Health` response header** — every attempt's outcome in walk order
   (`work:429, personal:ok`) on success and failure paths. Fanout's custom headers are now
   CORS-exposed so cross-origin callers can read them. Five new smoke assertions (27 total).
 
@@ -495,17 +519,17 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 - **Security review** of the live deployment. Crypto model survived every attack; two abuse paths
   found and fixed (pool cap, per-IP metering) plus one latent header-injection vector closed.
   Regression tests added for all three. Full detail in the Security review section above.
-- **Failover confirmed working live** â€” an 8-connection pool returns `X-Fanout-Attempts: 8`,
+- **Failover confirmed working live** — an 8-connection pool returns `X-Fanout-Attempts: 8`,
   proving the proxy actually walks the pool rather than giving up on the first failure.
 - **Deployed to production** at https://fanout-tawny.vercel.app, with the GitHub repo connected
   so pushes deploy themselves. Secrets are set for all three environments.
 - **Fixed a production-only 404** on `/api/v1/chat/completions` caused by catch-all route depth.
   Found by smoke-testing the live deploy, not by the build.
 - Verified live: key issuing, connection sealing, auth enforcement, rate-limit headers, model
-  validation, and â€” the important one â€” a blob issued to one user is rejected (403) when a
+  validation, and — the important one — a blob issued to one user is rejected (403) when a
   different user presents it. The full chain reaches Anthropic and returns a real `request_id`.
 - Test suite committed to `test/smoke.mts`; `npm run check` runs typecheck plus 22 assertions.
   Previously these existed only as throwaway scratch, which meant no one could re-run them.
 - Initial build: auth, sealing, three provider adapters, pooling proxy, landing page.
-- Verified with 22 runtime checks â€” cross-user blob rejection, tamper rejection, and SSE
+- Verified with 22 runtime checks — cross-user blob rejection, tamper rejection, and SSE
   reassembly across a split chunk boundary all pass. `tsc --noEmit` clean.
