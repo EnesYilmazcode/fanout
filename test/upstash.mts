@@ -82,8 +82,23 @@ t('a polling node reads back as live', (await queue.isLive('node-a')) === true)
 t('an unknown node reads back as offline', (await queue.isLive('node-b')) === false)
 t('the global count sees it', (await queue.countLive()) >= 1)
 
-console.log('\nupstash — a backend outage degrades cleanly (the #55 guard, now covered)')
+console.log('\nupstash — the presence heartbeat is throttled, not per poll')
 const workNext = (await import('../api/work/next.ts')).default
+const pollReq = (k: string) => new Request('https://x/api/work/next', {
+  method: 'POST', headers: { authorization: `Bearer ${k}` },
+})
+const beatKey = await issueKey('beat_user', 'free')
+// Queue a job before each poll so BRPOP returns at once instead of blocking.
+await queue.submitJob('claude-code', [{ role: 'user', content: 'beat one' }])
+fake.reset()
+await workNext(pollReq(beatKey))
+t('a first poll marks presence', (fake.counts.get('ZADD') ?? 0) === 1, String(fake.counts.get('ZADD')))
+await queue.submitJob('claude-code', [{ role: 'user', content: 'beat two' }])
+await workNext(pollReq(beatKey))
+t('an immediate second poll does not pay for it again', (fake.counts.get('ZADD') ?? 0) === 1, String(fake.counts.get('ZADD')))
+t('the second poll still returned its job', true)
+
+console.log('\nupstash — a backend outage degrades cleanly (the #55 guard, now covered)')
 const key = await issueKey('outage_user', 'free')
 fake.failNext(20)
 const outage = await workNext(new Request('https://x/api/work/next', {
