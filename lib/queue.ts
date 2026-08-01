@@ -30,6 +30,8 @@ const JOB_MAX_AGE_MS = 60_000
 
 interface Store {
   push(job: Job): Promise<void>
+  /** Take a queued job back out. No-op if a supporter already popped it. */
+  remove(job: Job): Promise<void>
   /** Block until a job is available or maxWaitMs elapses. */
   waitPop(maxWaitMs: number): Promise<Job | null>
   setResult(id: string, text: string): Promise<void>
@@ -56,6 +58,10 @@ function upstashStore(url: string, token: string): Store {
       // Keep only the newest MAX_QUEUE (LPUSH prepends, BRPOP drains the tail).
       await cmd(['LTRIM', QUEUE_KEY, 0, MAX_QUEUE - 1])
     },
+    // The value is byte-identical to what push serialised, since it is the same
+    // object. If a supporter popped it a moment ago this removes nothing, which
+    // is the correct outcome.
+    remove: async (job) => { await cmd(['LREM', QUEUE_KEY, 1, JSON.stringify(job)]) },
     // BRPOP blocks server-side for up to `timeout` seconds, so one idle poll is
     // ONE Redis command instead of ~20 RPOP+sleep round-trips. This is the
     // difference between a supporter costing ~4k and ~100k commands/day.
@@ -124,6 +130,10 @@ function memoryStore(): Store {
 
   return {
     push: async (job) => { trimJobs(); jobs.push(job) },
+    remove: async (job) => {
+      const i = jobs.findIndex((j) => j.id === job.id)
+      if (i >= 0) jobs.splice(i, 1)
+    },
     waitPop: async (maxWaitMs) => {
       const deadline = Date.now() + maxWaitMs
       while (true) {
@@ -180,10 +190,22 @@ export const QUEUE_DISTRIBUTED = Boolean(url && token)
 const store: Store = QUEUE_DISTRIBUTED ? upstashStore(url!, token!) : memoryStore()
 
 /** Jobs carry only model + flattened messages — no user id, no IP, nothing to correlate. */
-export async function submitJob(model: string, messages: Job['messages']): Promise<string> {
-  const id = crypto.randomUUID()
-  await store.push({ id, model, messages, queuedAt: Date.now() })
-  return id
+export async function submitJob(model: string, messages: Job['messages']): Promise<Job> {
+  const job: Job = { id: crypto.randomUUID(), model, messages, queuedAt: Date.now() }
+  await store.push(job)
+  return job
+}
+
+/**
+ * Withdraw a job whose caller has stopped waiting.
+ *
+ * The age trim cannot cover this. A job abandoned after 15s still looks fresh
+ * for another 45, so without this the next supporter to connect spends real
+ * model time answering a prompt nobody will read, and is not available for the
+ * request that does have someone waiting. Observed in production, not theorised.
+ */
+export async function cancelJob(job: Job): Promise<void> {
+  await store.remove(job)
 }
 
 /** Long-poll for work on behalf of a supporter. Resolves null when nothing shows up. */

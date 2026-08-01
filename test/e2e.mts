@@ -90,6 +90,7 @@ let workerOn = true
 // A real supporter runs `claude -p`, which takes tens of seconds on a real
 // question. Tests set this to simulate one that outlasts the buffered window.
 let answerDelayMs = 0
+const served: string[] = []
 async function supporter(key: string) {
   const auth = { authorization: `Bearer ${key}`, 'x-forwarded-for': '10.0.0.1' }
   while (workerOn) {
@@ -100,6 +101,7 @@ async function supporter(key: string) {
     if (res.status !== 200) continue // 204 (no work) or 429 (backoff) -> poll again
     const job = await res.json()
     const last = job.messages.at(-1)?.content ?? ''
+    served.push(last)
     if (answerDelayMs) await new Promise((r) => setTimeout(r, answerDelayMs))
     await post('/api/work/complete', { id: job.id, text: `SUPPORTER_REPLY: ${last}` }, auth)
   }
@@ -137,7 +139,9 @@ console.log('\ne2e — failure (a): claude-code with no supporter online -> clea
   // is here but slow) is asserted further down, and giving the wrong one is how
   // a caller gets told to retry into a supporter who is already answering.
   t('the 504 names the real reason: nobody is online', /no supporter is online/i.test(j.error?.message ?? ''), j.error?.message)
-  // The unclaimed job stays queued; the worker harmlessly drains it once started.
+  // This caller has now given up. Its job must leave with it, or the supporter
+  // started further down would spend real model time answering nobody. That is
+  // asserted after the worker has been running: see "abandoned job" below.
 }
 
 console.log('\ne2e — failure (b): oversized proxy body -> 400')
@@ -221,6 +225,9 @@ t('it outlasted the buffered window instead of 504ing', slowTook > 20_000, `${sl
 t('the stream opened immediately rather than buffering', sse4.startsWith('data: '))
 t('keepalives held the connection while the supporter worked', sse4.includes(': waiting for a supporter'))
 t('the slow stream still terminates with [DONE]', sse4.trimEnd().endsWith('data: [DONE]'))
+
+console.log('\ne2e — the abandoned job from failure (a) was never handed to the supporter')
+t('a caller that gave up did not leave work behind', !served.some((s) => s.includes('anyone-home')), JSON.stringify(served))
 
 console.log('\ne2e — bring-your-own-keys path against a fake provider')
 // Intercept only the provider endpoint; everything else uses real fetch.

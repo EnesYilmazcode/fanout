@@ -26,11 +26,27 @@ console.log('\nupstash — the real REST path, not the memory fallback')
 t('the queue selected the Upstash store', queue.QUEUE_DISTRIBUTED === true)
 
 console.log('\nupstash — job round trip')
-const jobId = await queue.submitJob('claude-code', [{ role: 'user', content: 'hello upstash' }])
+const submitted = await queue.submitJob('claude-code', [{ role: 'user', content: 'hello upstash' }])
 const popped = await queue.nextJob(2000)
-t('a submitted job comes back off the REST queue', popped?.id === jobId, popped?.id ?? 'none')
+t('a submitted job comes back off the REST queue', popped?.id === submitted.id, popped?.id ?? 'none')
 t('the job carries its messages intact', popped?.messages[0]?.content === 'hello upstash')
 t('the queue is empty once popped', (await queue.nextJob(1000)) === null)
+
+console.log('\nupstash — a caller that gives up takes its job with it')
+// Without this, a job abandoned after 15s still looks fresh to the age trim for
+// another 45, so the next supporter to connect burns real model time on it.
+const abandoned = await queue.submitJob('claude-code', [{ role: 'user', content: 'nobody is waiting for this' }])
+fake.reset()
+await queue.cancelJob(abandoned)
+t('cancelling costs one command', fake.total() === 1, `${fake.total()}`)
+t('the abandoned job is gone, so no supporter can be handed it', (await queue.nextJob(1200)) === null)
+
+// Cancelling a job a supporter already took must be a harmless no-op, not an error.
+const taken = await queue.submitJob('claude-code', [{ role: 'user', content: 'already popped' }])
+const gotIt = await queue.nextJob(2000)
+t('the supporter got the job first', gotIt?.id === taken.id)
+await queue.cancelJob(taken)
+t('cancelling an already-popped job is harmless', true)
 
 console.log('\nupstash — stale jobs are dropped (regression guard for #55)')
 // Push a job older than JOB_MAX_AGE_MS straight into the store, the way a queue

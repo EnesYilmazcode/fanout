@@ -9,7 +9,7 @@ import { verifyKey, bearer } from './auth'
 import { open, type Connection } from './seal'
 import { route, ADAPTERS, type ChatRequest } from './providers'
 import { check, LIMITS, clientIp, IP_PROXY_LIMIT, rlHeaders } from './ratelimit'
-import { submitJob, awaitResult, countLive, type Job } from './queue'
+import { submitJob, awaitResult, cancelJob, countLive, type Job } from './queue'
 import { hasSecrets, NOT_CONFIGURED } from './config'
 
 const CORS = {
@@ -131,9 +131,9 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
     return err(400, `Request too large for the relay: cap is ${MAX_JOB_BYTES / 1024}KB of messages.`, 'invalid_request_error', headers)
   }
 
-  let id: string
+  let job: Job
   try {
-    id = await submitJob(body.model, messages)
+    job = await submitJob(body.model, messages)
   } catch {
     // A queue-backend hiccup (e.g. transient Upstash 5xx) must not escape as a
     // bare platform 500 with no CORS or error envelope.
@@ -143,19 +143,24 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
   const created = Math.floor(Date.now() / 1000)
   const relayHeaders = { ...headers, 'x-fanout-provider': RELAY_PROVIDER }
 
-  if (body.stream) return relayStream(id, body, created, relayHeaders)
+  if (body.stream) return relayStream(job, body, created, relayHeaders)
 
   let text: string | null
   try {
-    text = await awaitResult(id, RELAY_WAIT_MS)
+    text = await awaitResult(job.id, RELAY_WAIT_MS)
   } catch {
     return err(502, 'The relay queue is temporarily unavailable. Try again shortly.', 'api_error', headers)
   }
-  if (text === null) return err(504, await timedOutMessage(), 'api_error', headers)
+  if (text === null) {
+    // Nobody is waiting for this any more. Leaving it queued means the next
+    // supporter to connect spends real model time on an answer no one reads.
+    await cancelJob(job).catch(() => {})
+    return err(504, await timedOutMessage(), 'api_error', headers)
+  }
 
   return new Response(
     JSON.stringify({
-      id: `chatcmpl-${id}`, object: 'chat.completion', created, model: body.model,
+      id: `chatcmpl-${job.id}`, object: 'chat.completion', created, model: body.model,
       choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     }),
@@ -185,11 +190,11 @@ async function timedOutMessage(known?: boolean): Promise<string> {
  * wait in slices, sending an SSE comment between them so nothing along the path
  * decides the connection is idle.
  */
-function relayStream(id: string, body: ChatRequest, created: number, relayHeaders: Record<string, string>): Response {
+function relayStream(job: Job, body: ChatRequest, created: number, relayHeaders: Record<string, string>): Response {
   const encoder = new TextEncoder()
   const frame = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`
   const chunk = (delta: unknown, finish: string | null) => ({
-    id: `chatcmpl-${id}`, object: 'chat.completion.chunk', created, model: body.model,
+    id: `chatcmpl-${job.id}`, object: 'chat.completion.chunk', created, model: body.model,
     choices: [{ index: 0, delta, finish_reason: finish }],
   })
 
@@ -206,7 +211,7 @@ function relayStream(id: string, body: ChatRequest, created: number, relayHeader
       while (Date.now() < deadline) {
         const slice = Math.min(RELAY_SLICE_MS, deadline - Date.now())
         try {
-          text = await awaitResult(id, slice)
+          text = await awaitResult(job.id, slice)
         } catch {
           break
         }
@@ -223,6 +228,7 @@ function relayStream(id: string, body: ChatRequest, created: number, relayHeader
       }
 
       if (text === null) {
+        await cancelJob(job).catch(() => {})
         send(frame({ error: { message: await timedOutMessage(online), type: 'api_error' } }))
       } else {
         send(frame(chunk({ content: text }, null)))

@@ -73,6 +73,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 56 | `/api/health` caches, meters and guards its queue read | `fix(health)` (#62) |
 | 57 | Status polling slowed to 10s and paused for hidden tabs | `fix(web)` (#61) |
 | 58 | Streaming relay holds ~110s so real supporter answers arrive; honest 504 | `feat(relay)` (#59, #60) |
+| 59 | A caller that gives up withdraws its job instead of leaving it queued | `fix(relay)` (#67) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -223,6 +224,13 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
+- **A caller that gives up no longer leaves work behind** (#67). Found in production while
+  verifying the change below. A request gave up after 15s with nobody online, its job stayed
+  queued, and a supporter that connected moments later spent 16.1 seconds of real model time
+  answering it. It was busy doing that instead of taking the live request behind it, so one
+  abandoned job cost a volunteer's tokens and starved a real caller at once. The age trim from
+  #55 cannot see this: a job abandoned at 15s still looks fresh for another 45. The caller now
+  withdraws its own job, which is the only party that knows.
 - **Real answers actually reach the caller now** (#59). Verified against production first: a real
   headless `claude -p` answering a real question took 23.3s, the caller was cut off at 20s, and the
   finished answer expired in Redis unread. The relay was demoing on toy prompts and failing at its

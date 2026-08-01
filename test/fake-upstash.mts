@@ -85,6 +85,21 @@ export async function startFakeUpstash(): Promise<FakeUpstash> {
           await sleep(10)
         }
       }
+      case 'LREM': {
+        // count > 0 removes from the head, count 0 removes every match.
+        const l = list(key)
+        const count = Number(parts[2])
+        const value = String(parts[3])
+        const limit = count === 0 ? Infinity : Math.abs(count)
+        const order = count < 0 ? [...l.keys()].reverse() : [...l.keys()]
+        const doomed = new Set<number>()
+        for (const i of order) {
+          if (doomed.size >= limit) break
+          if (l[i] === value) doomed.add(i)
+        }
+        lists.set(key, l.filter((_, i) => !doomed.has(i)))
+        return doomed.size
+      }
       case 'LLEN': return list(key).length
       case 'EXPIRE': {
         expiries.set(key, Date.now() + Number(parts[2]) * 1000)
