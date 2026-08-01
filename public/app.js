@@ -104,6 +104,13 @@ Note: jobs are strangers' prompts in plaintext, and they receive your answers ve
 
 let statusTimer = null
 
+// Each poll is three Upstash commands (ZSCORE for this node, then a prune and a
+// count for the global number), and presence has a 45s server-side TTL. Polling
+// every 3s bought no accuracy the TTL can express and cost 60 commands a minute
+// per open tab, against a 500K/month budget. Ten seconds is still well inside
+// the TTL and costs a fifth of that.
+const STATUS_POLL_MS = 10_000
+
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 function renderStatus({ connected, online }) {
@@ -138,9 +145,22 @@ async function pollStatus() {
 }
 
 function startWatching() {
+  if (document.hidden) return
   pollStatus()
-  if (!statusTimer) statusTimer = setInterval(pollStatus, 3000)
+  if (!statusTimer) statusTimer = setInterval(pollStatus, STATUS_POLL_MS)
 }
+
+function stopWatching() {
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
+}
+
+// A backgrounded tab was polling forever. Browsers throttle hidden timers but do
+// not stop them, and nobody is reading a status light they cannot see. Coming
+// back polls once immediately, so the number is current by the time it is looked at.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopWatching()
+  else startWatching()
+})
 
 // --- mode switch ----------------------------------------------------------
 
