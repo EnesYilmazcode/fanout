@@ -70,6 +70,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 53 | Dead-code sweep + shared `rlHeaders` (deduped from 4 copies) | `refactor` (#56) |
 | 54 | Four hollow tests rewired to real code paths (label sanitizer, IP limit, TTL, commit) | `test` (#57) |
 | 55 | Answer delivery blocks on `BRPOP` instead of polling; Upstash path covered by tests | `perf(queue)` (#58) |
+| 56 | `/api/health` caches, meters and guards its queue read | `fix(health)` (#62) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -219,6 +220,14 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ## Changelog
 
 ### 2026-08-01 (relay cost and Upstash coverage)
+
+- **`/api/health` stopped handing out free queue reads** (#62). `supporters_online` called
+  `countLive()` on every hit, which is a prune plus a count, so two metered Upstash commands per
+  anonymous request with no key and no limiter anywhere in the file. A curl loop was the cheapest
+  way to spend the project's whole monthly queue budget. It now serves a 5s cache, meters cache
+  misses per source, and catches a queue failure instead of returning a bare platform 500. That
+  last part matters on its own: the endpoint you check to find out whether the service is broken
+  was the one endpoint the #55 outage guard missed.
 
 - **Answer delivery stopped polling** (#58). `awaitResult` ran a `GET` twice a second for the whole
   wait window, so every relayed request cost about 40 Upstash commands and a timeout cost the full
