@@ -3,53 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Same strict CSP as every other page. This one holds a bearer key in
+     localStorage and takes a live provider secret in a form field, so it is the
+     page that least deserved the exemption it used to have. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
 <meta name="theme-color" content="#0d0f12" />
 <title>Fanout — live demo</title>
 <meta name="description" content="One endpoint, all your keys. A stateless multi-provider AI proxy with automatic failover, running on the edge." />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<style>
-  :root {
-    --bg: #0d0f12; --panel: #14171c; --line: #232830; --ink: #e8eaed;
-    --dim: #8b929e; --accent: #ff7a45; --ok: #5ad1a0; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.6 system-ui, -apple-system, Segoe UI, sans-serif;
-  }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
-  h1 { font-size: 40px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
-  h1 span { color: var(--accent); }
-  .tag { color: var(--dim); font-size: 17px; margin: 0 0 40px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 40px 0 12px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
-  label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 5px; }
-  input, select, textarea {
-    width: 100%; padding: 10px 12px; background: #0a0c0f; color: var(--ink);
-    border: 1px solid var(--line); border-radius: 7px; font-family: var(--mono); font-size: 13px;
-  }
-  textarea { resize: vertical; min-height: 70px; font-family: inherit; }
-  button {
-    margin-top: 14px; padding: 10px 18px; background: var(--accent); color: #17110d;
-    border: 0; border-radius: 7px; font-weight: 650; font-size: 14px; cursor: pointer;
-  }
-  button:disabled { opacity: 0.45; cursor: default; }
-  :focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 7px;
-  }
-  pre {
-    margin: 14px 0 0; padding: 13px; background: #0a0c0f; border: 1px solid var(--line);
-    border-radius: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--ok);
-    white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto;
-  }
-  pre:empty { display: none; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; }
-  .row > * { flex: 1; min-width: 180px; }
-  .pool { font-size: 12px; color: var(--dim); margin-top: 10px; font-family: var(--mono); }
-  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; }
-  a { color: var(--accent); }
-  code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
-</style>
+<link rel="stylesheet" href="/demo.css" />
 </head>
 <body>
 <div class="wrap">
@@ -147,120 +110,6 @@ await fanout.chat.completions.create({
   </footer>
 </div>
 
-<script>
-const $ = (id) => document.getElementById(id)
-const show = (el, v) => { el.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2) }
-const origin = location.origin
-
-let fanoutKey = localStorage.getItem('fanout_key') || ''
-let connections = JSON.parse(localStorage.getItem('fanout_conns') || '[]')
-
-if (fanoutKey) show($('out-key'), fanoutKey)
-renderPool()
-
-document.querySelectorAll('pre').forEach((p) => {
-  if (p.textContent.includes('$ORIGIN')) p.textContent = p.textContent.replaceAll('$ORIGIN', origin)
-})
-
-function renderPool() {
-  $('pool').textContent = connections.length
-    ? `pool: ${connections.map((c) => `${c.provider}:${c.label || 'unnamed'}`).join('  ·  ')}`
-    : ''
-  localStorage.setItem('fanout_conns', JSON.stringify(connections))
-}
-
-async function post(path, body, key) {
-  const res = await fetch(origin + path, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(key ? { authorization: `Bearer ${key}` } : {}),
-    },
-    body: JSON.stringify(body),
-  })
-  return { res, json: await res.json().catch(() => ({})) }
-}
-
-$('btn-key').onclick = async () => {
-  const btn = $('btn-key'); btn.disabled = true
-  try {
-    const { json } = await post('/api/keys/issue', { handle: $('handle').value })
-    if (json.key) {
-      fanoutKey = json.key
-      localStorage.setItem('fanout_key', fanoutKey)
-    }
-    show($('out-key'), json)
-  } catch (e) { show($('out-key'), String(e)) }
-  btn.disabled = false
-}
-
-$('btn-connect').onclick = async () => {
-  if (!fanoutKey) return show($('out-connect'), 'Issue a Fanout key first.')
-  const btn = $('btn-connect'); btn.disabled = true
-  try {
-    const { json } = await post('/api/connect', {
-      provider: $('provider').value,
-      apiKey: $('provider-key').value,
-      label: $('label').value,
-    }, fanoutKey)
-    if (json.connection) {
-      connections.push({ blob: json.connection, provider: json.provider, label: json.label })
-      $('provider-key').value = ''
-      renderPool()
-    }
-    show($('out-connect'), json)
-  } catch (e) { show($('out-connect'), String(e)) }
-  btn.disabled = false
-}
-
-$('btn-run').onclick = async () => {
-  if (!fanoutKey) return show($('out-run'), 'Issue a Fanout key first.')
-  if (!connections.length) return show($('out-run'), 'Seal at least one connection first.')
-  const btn = $('btn-run'); btn.disabled = true
-  show($('out-run'), 'streaming…')
-  try {
-    const res = await fetch(origin + '/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${fanoutKey}`,
-        'x-fanout-connection': connections.map((c) => c.blob).join(','),
-      },
-      body: JSON.stringify({
-        model: $('model').value,
-        stream: true,
-        messages: [{ role: 'user', content: $('prompt').value }],
-      }),
-    })
-
-    if (!res.ok || !res.body) return show($('out-run'), await res.text())
-
-    const served = res.headers.get('x-fanout-connection-label')
-    let text = served ? `[served by ${res.headers.get('x-fanout-provider')} · ${served}]\n\n` : ''
-    show($('out-run'), text)
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      let i
-      while ((i = buf.indexOf('\n\n')) !== -1) {
-        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2)
-        if (!line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (payload === '[DONE]') continue
-        try {
-          const delta = JSON.parse(payload).choices?.[0]?.delta?.content
-          if (delta) { text += delta; show($('out-run'), text) }
-        } catch {}
-      }
-    }
-  } catch (e) { show($('out-run'), String(e)) }
-  btn.disabled = false
-}
-</script>
+<script src="/demo.js"></script>
 </body>
 </html>

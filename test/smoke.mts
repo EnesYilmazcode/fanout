@@ -395,7 +395,9 @@ const { readFileSync, existsSync } = await import('node:fs')
 const demoHtml = readFileSync(new URL('../public/demo.html', import.meta.url), 'utf8')
 t('demo references the shared /favicon.svg', demoHtml.includes('href="/favicon.svg"'))
 t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color" content="#0d0f12"'))
-t('demo has a visible focus-visible ring', demoHtml.includes(':focus-visible'))
+// The styles moved out of the page so a strict CSP could be applied (#77), so the
+// ring now lives in demo.css. Same guarantee, different file.
+t('demo has a visible focus-visible ring', readFileSync(new URL('../public/demo.css', import.meta.url), 'utf8').includes(':focus-visible'))
 t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
 console.log('\nvercel.json — security and cache response headers')
@@ -555,6 +557,19 @@ t('the worker script always delivers an answer, even a failed one', /could not p
 t('the worker script records a pid so the stop instruction works', /fanout_worker\.pid/.test(llms))
 // The board concluded both of these carry real risk for a supporter. They belong
 // where a supporter reads, not only in PROJECT.md (#72).
+// CLAUDE.md and CONTRIBUTING both promise a strict CSP on every page, and demo.html
+// was the exception: the one page that takes a live provider secret in a form field.
+// Pin all three pages, and pin the absence of inline script/style that made it
+// impossible before (#77).
+{
+  const pages = ['index.html', 'demo.html', '404.html']
+  for (const page of pages) {
+    const src = readFileSync(new URL(`../public/${page}`, import.meta.url), 'utf8')
+    t(`${page} carries the strict CSP`, /http-equiv="Content-Security-Policy"/.test(src) && /default-src 'none'/.test(src))
+    t(`${page} has no inline script or style for the CSP to block`, !/<style>/.test(src) && !/<script>[^<]/.test(src))
+  }
+}
+
 t('llms.txt frames the prompt as untrusted input', /untrusted input/i.test(llms))
 t('llms.txt tells supporters to check their plan terms', /subscriptions license/i.test(llms))
 t('llms.txt offers the no-supporter alternative', /do not run a supporter node/i.test(llms))
