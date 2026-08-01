@@ -75,6 +75,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 58 | Streaming relay holds ~110s so real supporter answers arrive; honest 504 | `feat(relay)` (#59, #60) |
 | 59 | A caller that gives up withdraws its job instead of leaving it queued | `fix(relay)` (#67) |
 | 60 | Supporter worker loop handles error statuses, backs off, always answers | `fix(supporter)` (#70) |
+| 61 | Supporter-side risks (untrusted prompts, plan terms) shown where supporters start | `docs` (#72) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -225,6 +226,16 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ### 2026-08-01 (relay cost and Upstash coverage)
 
+- **Supporters can now see the risks this board already recorded** (#72). The Resolved section
+  says subscription auth is licensed for the holder's own use and that every supporter node would
+  risk a ban. That was written here and nowhere a supporter could read it, while the homepage asked
+  strangers to point Claude Code at the site and start answering. A risk this project has reasoned
+  about and then not passed on is worse than one nobody noticed. Prompt injection was the second
+  gap: the design review covered a malicious supporter poisoning a caller and never the reverse,
+  which is the direction that runs on someone else's machine. Both are now in `llms.txt` and on the
+  supporter view, with the honest alternative, which is the bring-your-own-keys path rather than
+  the self-relay line the design doc suggests, since the queue is global and no node can currently
+  answer only its own requests.
 - **The supporter worker loop stopped being dangerous on error paths** (#70). It decided "is there
   work" by testing whether the body was empty. A 204 is empty and was fine, but 401, 429 and 503
   all return non-empty JSON, so all three were treated as jobs, and none of them long-poll. With no

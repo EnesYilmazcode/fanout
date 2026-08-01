@@ -22,7 +22,10 @@ brief to paste into Claude Code / Codex. The bring-your-own-keys UI lives at `pu
 - **Strict CSP on every HTML page** (no inline script/style, same-origin only). A bearer key in
   localStorage means any XSS is key theft. Keep JS/CSS in external files.
 - **The relay is a disclosed plaintext-trust relationship.** Supporters see prompts, users see
-  answers. Say so where a supporter starts; do not pretend otherwise.
+  answers. Say so where a supporter starts; do not pretend otherwise. The same applies to the two
+  risks a supporter actually carries: the prompt is untrusted input reaching their agent, and a
+  consumer subscription is licensed to its holder. Anything the board concludes about supporter
+  risk belongs where a supporter will read it, not only in `PROJECT.md`.
 
 ## Testing & deploy
 
