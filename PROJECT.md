@@ -69,6 +69,7 @@ stale relative to the code. Newest entries at the top of each log.
 | 52 | Upstash queue drops stale jobs by age; work/* guard backend errors (503 envelope) | `fix(queue)` (#55) |
 | 53 | Dead-code sweep + shared `rlHeaders` (deduped from 4 copies) | `refactor` (#56) |
 | 54 | Four hollow tests rewired to real code paths (label sanitizer, IP limit, TTL, commit) | `test` (#57) |
+| 55 | Answer delivery blocks on `BRPOP` instead of polling; Upstash path covered by tests | `perf(queue)` (#58) |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -216,6 +217,20 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-01 (relay cost and Upstash coverage)
+
+- **Answer delivery stopped polling** (#58). `awaitResult` ran a `GET` twice a second for the whole
+  wait window, so every relayed request cost about 40 Upstash commands and a timeout cost the full
+  40 for nothing. The job side already solved this with `BRPOP`; the answer side now does the same.
+  A 20s wait is 2 commands instead of 40. That matters on its own (Upstash free is 500K commands a
+  month) and it is what makes a longer wait window affordable, which is the fix for #59.
+- **The Upstash path has tests for the first time** (#58). `test/fake-upstash.mts` is a small REST
+  stand-in that speaks the handful of Redis commands the queue uses, so `npm run test:upstash`
+  exercises the branch that actually serves production instead of the memory fallback. It covers
+  the job round trip, the stale-job drop from #55 (previously untested, and the kind of bug only
+  this path can have), answer delivery, presence, and the 503 outage guard. It also counts
+  commands, so the cost claim above is asserted rather than argued.
 
 ### 2026-07-31 (README graphics + audit-driven fixes)
 
