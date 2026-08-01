@@ -78,6 +78,28 @@ const outageBody = await outage.json()
 t('the outage body is a JSON error envelope', typeof outageBody?.error?.message === 'string')
 t('the outage response still carries CORS', outage.headers.get('access-control-allow-origin') === '*')
 
+console.log('\nupstash — /api/health does not hand out free queue reads')
+const health = (await import('../api/health.ts')).default
+// The outage above armed more failures than it consumed. Clear them.
+fake.failNext(0)
+// First health call of the process, so the cache is cold and this is a real read.
+fake.reset()
+const h1 = await health(new Request('https://x/api/health'))
+const h1Body = await h1.json()
+t('health reports a live supporter count', typeof h1Body.supporters_online === 'number', String(h1Body.supporters_online))
+t('a cold health read costs one prune plus one count', fake.total() === 2, `${fake.total()}`)
+for (let i = 0; i < 5; i++) await health(new Request('https://x/api/health'))
+t('five more hits inside the cache window cost nothing', fake.total() === 2, `${fake.total()}`)
+
+// Let the cache lapse, then take the queue away underneath it.
+await new Promise((r) => setTimeout(r, 5100))
+fake.failNext(20)
+const h2 = await health(new Request('https://x/api/health'))
+const h2Body = await h2.json()
+t('health still answers 200 while the queue is down', h2.status === 200, `status=${h2.status}`)
+t('health reports the unreadable count as null instead of throwing', h2Body.supporters_online === null, String(h2Body.supporters_online))
+t('health still reports the rest of the service', h2Body.ok === true && h2Body.queue === 'upstash')
+
 await fake.close()
 console.log(failed === 0 ? '\nupstash: all checks passed' : `\nupstash: ${failed} check(s) FAILED`)
 process.exit(failed === 0 ? 0 : 1)
