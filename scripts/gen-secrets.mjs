@@ -1,5 +1,5 @@
 // node scripts/gen-secrets.mjs
-// Prints the two secrets Fanout needs. Paste them into `vercel env add` (mark
+// Prints the two secrets Relaybee needs. Paste them into `vercel env add` (mark
 // both Sensitive) or into .env.local for `vercel dev`.
 
 import { randomBytes } from 'node:crypto'

@@ -1,6 +1,6 @@
 // Per-instance sliding-window limiter.
 //
-// This is deliberately not distributed. Fanout has no datastore, so the counter
+// This is deliberately not distributed. Relaybee has no datastore, so the counter
 // lives in module scope on whatever warm edge instance served the request — a
 // user spread across regions gets roughly N-regions times the limit, and a cold
 // start resets to zero. That is fine for what this protects: our own invocation
@@ -15,7 +15,7 @@ const WINDOW_MS = 60_000
 export type Verdict = { ok: boolean; limit: number; remaining: number; resetAt: number }
 
 /**
- * The rate-limit response headers for a Verdict. Every Fanout endpoint returns
+ * The rate-limit response headers for a Verdict. Every Relaybee endpoint returns
  * the same envelope so a cross-origin worker sees identical fields everywhere;
  * keeping this in one place stops the four copies from drifting.
  */

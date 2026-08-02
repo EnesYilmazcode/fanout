@@ -1,7 +1,7 @@
-# Fanout: instructions for an AI coding agent
+# Relaybee: instructions for an AI coding agent
 
-If a human told you to "connect to Fanout" or "run as a Fanout supporter", this
-file is the whole job. Fanout is a relay: people send chat requests to the
+If a human told you to "connect to Relaybee" or "run as a Relaybee supporter", this
+file is the whole job. Relaybee is a relay: people send chat requests to the
 `claude-code` model, and supporter machines like yours answer them. Follow the
 steps below and keep going until the human tells you to stop.
 
@@ -56,8 +56,8 @@ The loop answers each job with your own Claude Code in headless mode (`claude
     BASE=https://relaybee.vercel.app
     command -v jq >/dev/null || { echo "jq is required, install it first"; exit 1; }
     KEY=$(curl -sX POST $BASE/api/keys/issue | jq -r '.key // empty')
-    [ -n "$KEY" ] || { echo "could not mint a Fanout key"; exit 1; }
-    echo "$KEY" > ~/.fanout_key
+    [ -n "$KEY" ] || { echo "could not mint a Relaybee key"; exit 1; }
+    echo "$KEY" > ~/.relaybee_key
     (
       while true; do
         RES=$(curl -sS -X POST $BASE/api/work/next -H "Authorization: Bearer $KEY" -w '\n%{http_code}')
@@ -82,13 +82,13 @@ The loop answers each job with your own Claude Code in headless mode (`claude
           -d "$(jq -n --arg id "$ID" --arg text "$ANSWER" '{id:$id,text:$text}')" >/dev/null
         echo "answered $ID at $(date)"
       done
-    ) >> ~/.fanout_worker.log 2>&1 &
-    echo $! > ~/.fanout_worker.pid
-    echo "supporter is polling in the background, pid $(cat ~/.fanout_worker.pid)"
-    echo "watch: tail -f ~/.fanout_worker.log"
-    echo "stop:  kill \$(cat ~/.fanout_worker.pid)"
+    ) >> ~/.relaybee_worker.log 2>&1 &
+    echo $! > ~/.relaybee_worker.pid
+    echo "supporter is polling in the background, pid $(cat ~/.relaybee_worker.pid)"
+    echo "watch: tail -f ~/.relaybee_worker.log"
+    echo "stop:  kill \$(cat ~/.relaybee_worker.pid)"
 
-To stop later: `kill $(cat ~/.fanout_worker.pid)`.
+To stop later: `kill $(cat ~/.relaybee_worker.pid)`.
 
 Two things that script is careful about, and yours should be too. Check the HTTP
 status rather than testing whether the body is empty: 401, 429 and 503 all return
@@ -113,7 +113,7 @@ the loop with a faster model.
   the holder for their own use, and answering other people's requests with that
   seat may fall outside it. This project's own design review concluded that it
   does, which is why the terms are stated here rather than left for you to find.
-- If either of those gives you pause, do not run a supporter node. Fanout's
+- If either of those gives you pause, do not run a supporter node. Relaybee's
   other path, where a caller brings their own provider keys, needs no supporter
   at all and none of this applies to it.
 - There is no payment and no obligation. Stop whenever you want.

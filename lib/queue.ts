@@ -14,8 +14,8 @@ export type Job = {
 }
 
 const RESULT_TTL_S = 120
-const QUEUE_KEY = 'fanout:jobs'
-const NODES_KEY = 'fanout:nodes'
+const QUEUE_KEY = 'relaybee:jobs'
+const NODES_KEY = 'relaybee:nodes'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // A supporter node counts as "connected" for this long after its last poll.
@@ -89,14 +89,14 @@ function upstashStore(url: string, token: string): Store {
     // The answer is a one-element list rather than a plain string so the waiting
     // caller can BRPOP it instead of polling GET twice a second.
     setResult: async (id, text) => {
-      await cmd(['LPUSH', `fanout:result:${id}`, text])
-      await cmd(['EXPIRE', `fanout:result:${id}`, RESULT_TTL_S])
+      await cmd(['LPUSH', `relaybee:result:${id}`, text])
+      await cmd(['EXPIRE', `relaybee:result:${id}`, RESULT_TTL_S])
     },
     // Same trick as waitPop, on the other side of the relay: one blocking command
     // per 15s of waiting instead of two GETs a second. That is what makes a long
     // wait affordable, and a long wait is what real answers need.
     waitResult: async (id, maxWaitMs) => {
-      const key = `fanout:result:${id}`
+      const key = `relaybee:result:${id}`
       const deadline = Date.now() + maxWaitMs
       while (true) {
         const remaining = deadline - Date.now()
@@ -216,7 +216,7 @@ export async function nextJob(maxWaitMs: number): Promise<Job | null> {
   return store.waitPop(maxWaitMs)
 }
 
-/** Record that a supporter node is alive right now, keyed by its Fanout user id. */
+/** Record that a supporter node is alive right now, keyed by its Relaybee user id. */
 export async function markLive(userId: string): Promise<void> {
   await store.markPresence(userId)
 }

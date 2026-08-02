@@ -2,7 +2,7 @@
 //
 // The homepage polls this in supporter mode so it can light up "connected" the
 // moment the pasted worker loop starts hitting /api/work/next. Presence is keyed
-// by the Fanout user id in the bearer key, so a caller only ever sees the status
+// by the Relaybee user id in the bearer key, so a caller only ever sees the status
 // of its own node — no cross-user visibility.
 
 import { verifyKey, bearer } from '../../lib/auth'
@@ -33,7 +33,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'GET') return json(405, { error: { message: 'Use GET.' } })
 
   const auth = await verifyKey(bearer(req))
-  if (!auth) return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
+  if (!auth) return json(401, { error: { message: 'Missing or invalid Relaybee API key.', type: 'authentication_error' } })
   const rl = check(`status:${clientIp(req)}`, IP_STATUS_LIMIT)
   const rlh = rlHeaders(rl)
   if (!rl.ok) {

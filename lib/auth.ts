@@ -1,6 +1,6 @@
 // Self-verifying API keys. The key IS the record — there is no user table.
 //
-//   fo_live_<base64url(payload)>.<base64url(hmac_sha256(payload))>
+//   rb_live_<base64url(payload)>.<base64url(hmac_sha256(payload))>
 //
 // Verification is a single HMAC recompute: no database round trip, ~microseconds,
 // and it works on the Edge runtime via WebCrypto.
@@ -15,7 +15,13 @@ export type KeyPayload = {
   e: number // expires at (unix seconds)
 }
 
-const PREFIX = 'fo_live_'
+const PREFIX = 'rb_live_'
+// The project was called Fanout until 2026-08-01 and minted fo_live_ keys. Keys
+// last 90 days and there is no database to migrate them in, so the only way not
+// to break every key already in someone's browser or supporter loop is to keep
+// verifying the old prefix. Both are signed by the same MASTER_SECRET; the
+// prefix is a label, not part of the signed payload.
+const LEGACY_PREFIXES = ['fo_live_']
 const KEY_VERSION = 1
 const TTL_SECONDS = 90 * 24 * 60 * 60
 
@@ -44,8 +50,10 @@ export async function issueKey(userId: string, tier: KeyPayload['t'] = 'free'): 
 }
 
 export async function verifyKey(raw: string | null): Promise<KeyPayload | null> {
-  if (!raw || !raw.startsWith(PREFIX)) return null
-  const [body, sig] = raw.slice(PREFIX.length).split('.')
+  if (!raw) return null
+  const prefix = [PREFIX, ...LEGACY_PREFIXES].find((p) => raw.startsWith(p))
+  if (!prefix) return null
+  const [body, sig] = raw.slice(prefix.length).split('.')
   if (!body || !sig) return null
 
   let ok: boolean

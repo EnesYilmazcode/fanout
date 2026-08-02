@@ -6,7 +6,8 @@
 const $ = (id) => document.getElementById(id)
 const origin = location.origin
 
-let fanoutKey = localStorage.getItem('fanout_key') || ''
+// fanout_key is the pre-rename name: read it once so an existing key survives.
+let relaybeeKey = localStorage.getItem('relaybee_key') || localStorage.getItem('fanout_key') || ''
 let supporting = false
 
 // --- key ------------------------------------------------------------------
@@ -19,15 +20,15 @@ async function mint() {
 }
 
 function render() {
-  $('key').textContent = fanoutKey || '…'
+  $('key').textContent = relaybeeKey || '…'
   $('worker').textContent = workerBrief()
 }
 
 async function ensureKey() {
-  if (fanoutKey) return
+  if (relaybeeKey) return
   try {
-    fanoutKey = await mint()
-    localStorage.setItem('fanout_key', fanoutKey)
+    relaybeeKey = await mint()
+    localStorage.setItem('relaybee_key', relaybeeKey)
     render()
   } catch {
     $('key').textContent = 'unavailable — refresh to retry'
@@ -38,8 +39,8 @@ $('btn-regen').addEventListener('click', async () => {
   if (!confirm('Regenerate? The old key keeps working until it expires, but this browser forgets it.')) return
   const btn = $('btn-regen'); btn.disabled = true
   try {
-    fanoutKey = await mint()
-    localStorage.setItem('fanout_key', fanoutKey)
+    relaybeeKey = await mint()
+    localStorage.setItem('relaybee_key', relaybeeKey)
     render()
   } catch { $('key').textContent = 'unavailable — refresh to retry' }
   btn.disabled = false
@@ -55,7 +56,7 @@ async function copy(btn, text, flash) {
 }
 
 $('btn-copy').addEventListener('click', (e) => {
-  copy(e.currentTarget, fanoutKey, (btn) => {
+  copy(e.currentTarget, relaybeeKey, (btn) => {
     btn.classList.add('done')
     setTimeout(() => btn.classList.remove('done'), 1200)
   })
@@ -81,12 +82,12 @@ $('btn-copy-connect').addEventListener('click', (e) => {
 // The one line a supporter gives Claude Code. Claude fetches /llms.txt from the
 // site and runs the worker loop from there — no key to copy, nothing to paste.
 function connectLine() {
-  return `Connect to ${origin} and run as a Fanout supporter: fetch ${origin}/llms.txt and follow it, answering jobs until I tell you to stop.`
+  return `Connect to ${origin} and run as a Relaybee supporter: fetch ${origin}/llms.txt and follow it, answering jobs until I tell you to stop.`
 }
 
 function workerBrief() {
-  const key = fanoutKey || '<your key>'
-  return `Run my machine as a Fanout supporter node. Loop forever until I say stop:
+  const key = relaybeeKey || '<your key>'
+  return `Run my machine as a Relaybee supporter node. Loop forever until I say stop:
 
 1. POST ${origin}/api/work/next with header "Authorization: Bearer ${key}".
    It long-polls about 20 seconds. Check the HTTP status, do not just look at the body:
@@ -140,9 +141,9 @@ function renderStatus({ connected, online }) {
 }
 
 async function pollStatus() {
-  if (!fanoutKey) return
+  if (!relaybeeKey) return
   try {
-    const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${fanoutKey}` } })
+    const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${relaybeeKey}` } })
     if (res.ok) {
       const data = await res.json()
       renderStatus({ connected: data.connected === true, online: Number(data.online) || 0 })

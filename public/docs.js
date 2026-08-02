@@ -7,9 +7,10 @@
 
 const $ = (id) => document.getElementById(id)
 const origin = location.origin
-const PLACEHOLDER = 'YOUR_FANOUT_KEY'
+const PLACEHOLDER = 'YOUR_RELAYBEE_KEY'
 
-let fanoutKey = localStorage.getItem('fanout_key') || ''
+// fanout_key is the pre-rename name: read it once so an existing key survives.
+let relaybeeKey = localStorage.getItem('relaybee_key') || localStorage.getItem('fanout_key') || ''
 
 // --- filling the examples --------------------------------------------------
 
@@ -21,14 +22,14 @@ for (const pre of document.querySelectorAll('pre[data-fill]')) {
 }
 
 function fill() {
-  const key = fanoutKey || PLACEHOLDER
+  const key = relaybeeKey || PLACEHOLDER
   for (const [pre, tpl] of templates) {
     pre.textContent = tpl.split('__ORIGIN__').join(origin).split('__KEY__').join(key)
   }
-  $('key').textContent = fanoutKey || 'no key in this browser yet'
-  $('btn-mint').hidden = Boolean(fanoutKey)
-  $('btn-copy').disabled = !fanoutKey
-  $('key-hint').textContent = fanoutKey
+  $('key').textContent = relaybeeKey || 'no key in this browser yet'
+  $('btn-mint').hidden = Boolean(relaybeeKey)
+  $('btn-copy').disabled = !relaybeeKey
+  $('key-hint').textContent = relaybeeKey
     ? 'Read from this browser. It is the same key the home page gave you, and it is filled into every example below.'
     : 'Mint one and every example below fills itself in. Keys are free, unauthenticated, and last 90 days.'
 }
@@ -48,7 +49,7 @@ async function copy(btn, text) {
 for (const btn of document.querySelectorAll('.snippet .copy')) {
   btn.addEventListener('click', () => copy(btn, btn.parentElement.querySelector('pre').textContent))
 }
-$('btn-copy').addEventListener('click', (e) => copy(e.currentTarget, fanoutKey))
+$('btn-copy').addEventListener('click', (e) => copy(e.currentTarget, relaybeeKey))
 
 // --- minting ---------------------------------------------------------------
 
@@ -59,8 +60,8 @@ $('btn-mint').addEventListener('click', async (e) => {
     const res = await fetch(origin + '/api/keys/issue', { method: 'POST' })
     const json = await res.json().catch(() => ({}))
     if (!json.key) throw new Error(json.error?.message || 'Could not mint a key.')
-    fanoutKey = json.key
-    localStorage.setItem('fanout_key', fanoutKey)
+    relaybeeKey = json.key
+    localStorage.setItem('relaybee_key', relaybeeKey)
     fill()
     startWatching()
   } catch (err) {
@@ -88,15 +89,15 @@ function renderStatus(n) {
 }
 
 async function pollStatus() {
-  if (!fanoutKey) return
+  if (!relaybeeKey) return
   try {
-    const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${fanoutKey}` } })
+    const res = await fetch(origin + '/api/work/status', { headers: { authorization: `Bearer ${relaybeeKey}` } })
     if (res.ok) renderStatus(Number((await res.json()).online) || 0)
   } catch { /* transient, the next tick retries */ }
 }
 
 function startWatching() {
-  if (document.hidden || !fanoutKey) return
+  if (document.hidden || !relaybeeKey) return
   pollStatus()
   if (!statusTimer) statusTimer = setInterval(pollStatus, STATUS_POLL_MS)
 }
@@ -120,7 +121,7 @@ async function runTry() {
   const out = $('try-out')
   const prompt = $('try-prompt').value.trim()
 
-  if (!fanoutKey) { show(out, 'Mint a key first.', true); return }
+  if (!relaybeeKey) { show(out, 'Mint a key first.', true); return }
   if (!prompt) { show(out, 'Type a prompt first.', true); return }
 
   btn.disabled = true
@@ -129,7 +130,7 @@ async function runTry() {
   try {
     const res = await fetch(origin + '/api/v1/chat/completions', {
       method: 'POST',
-      headers: { authorization: `Bearer ${fanoutKey}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${relaybeeKey}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-code',
         stream: true,

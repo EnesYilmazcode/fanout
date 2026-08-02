@@ -8,15 +8,15 @@
      localStorage to fill the examples in, so inline script would be key theft. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
-<title>Fanout — API docs</title>
-<meta name="description" content="How to use your Fanout key: one curl, then the same call from any OpenAI client." />
+<title>Relaybee — API docs</title>
+<meta name="description" content="How to use your Relaybee key: one curl, then the same call from any OpenAI client." />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/docs.css" />
 </head>
 <body>
 
 <nav>
-  <a class="brand" href="/">Fanout</a>
+  <a class="brand" href="/">Relaybee</a>
   <span class="sep">/</span>
   <span class="here">docs</span>
   <a class="right" href="/demo.html">bring your own keys</a>
@@ -25,7 +25,7 @@
 <main>
 
   <h1>Using your key</h1>
-  <p class="lead">A Fanout key is a bearer token for an OpenAI-shaped API. There is nothing to
+  <p class="lead">A Relaybee key is a bearer token for an OpenAI-shaped API. There is nothing to
   install and no account. Every example on this page is filled in with your own key, so you can
   copy one and run it.</p>
 
@@ -95,20 +95,20 @@ curl.exe -N __ORIGIN__/api/v1/chat/completions `
   </section>
 
   <h2>3. The same call from code</h2>
-  <p>Fanout speaks OpenAI's wire format, so any OpenAI client works. Point <code>baseURL</code> at
-  Fanout and pass your key where the OpenAI key would go.</p>
+  <p>Relaybee speaks OpenAI's wire format, so any OpenAI client works. Point <code>baseURL</code> at
+  Relaybee and pass your key where the OpenAI key would go.</p>
 
   <h3>JavaScript</h3>
   <div class="snippet">
     <button class="copy" aria-label="Copy this snippet">copy</button>
 <pre data-fill>import OpenAI from 'openai'
 
-const fanout = new OpenAI({
+const relaybee = new OpenAI({
   baseURL: '__ORIGIN__/api/v1',
   apiKey: '__KEY__',
 })
 
-const stream = await fanout.chat.completions.create({
+const stream = await relaybee.chat.completions.create({
   model: 'claude-code',
   messages: [{ role: 'user', content: 'Say hello in one sentence.' }],
   stream: true,
@@ -124,9 +124,9 @@ for await (const part of stream) {
     <button class="copy" aria-label="Copy this snippet">copy</button>
 <pre data-fill>from openai import OpenAI
 
-fanout = OpenAI(base_url="__ORIGIN__/api/v1", api_key="__KEY__")
+relaybee = OpenAI(base_url="__ORIGIN__/api/v1", api_key="__KEY__")
 
-stream = fanout.chat.completions.create(
+stream = relaybee.chat.completions.create(
     model="claude-code",
     messages=[{"role": "user", "content": "Say hello in one sentence."}],
     stream=True,
@@ -145,9 +145,9 @@ OPENAI_API_KEY=__KEY__</pre>
   </div>
 
   <h2>4. Bringing your own provider key</h2>
-  <p>The other path. Instead of a supporter, Fanout calls Anthropic, OpenAI, or Groq with a
-  credential you supply. Fanout does not store it: the key comes back to you encrypted into a blob
-  that only your Fanout key can open, and you send that blob on each request.</p>
+  <p>The other path. Instead of a supporter, Relaybee calls Anthropic, OpenAI, or Groq with a
+  credential you supply. Relaybee does not store it: the key comes back to you encrypted into a blob
+  that only your Relaybee key can open, and you send that blob on each request.</p>
   <p>Do it in the browser at <a href="/demo.html">bring your own keys</a>, or by hand:</p>
 
   <div class="snippet">
@@ -161,15 +161,15 @@ curl __ORIGIN__/api/connect \
 # 2. Send it on every call, in a header.
 curl __ORIGIN__/api/v1/chat/completions \
   -H "Authorization: Bearer __KEY__" \
-  -H "X-Fanout-Connection: &lt;the connection value&gt;" \
+  -H "X-Relaybee-Connection: &lt;the connection value&gt;" \
   -H "Content-Type: application/json" \
   -d '{"model":"anthropic/claude-opus-5",
        "messages":[{"role":"user","content":"hi"}]}'</pre>
   </div>
 
-  <p>Comma-separate up to 8 connections in that header to pool them. Fanout starts at a random one
+  <p>Comma-separate up to 8 connections in that header to pool them. Relaybee starts at a random one
   and fails over to the next on 401, 403, 429, or 5xx, so a pool behaves like one key with the
-  combined quota. The <code>X-Fanout-Pool-Health</code> response header reports how each attempt
+  combined quota. The <code>X-Relaybee-Pool-Health</code> response header reports how each attempt
   went, in the order tried.</p>
 
   <h2>Models</h2>
@@ -196,7 +196,7 @@ curl __ORIGIN__/api/v1/chat/completions \
       <tr><td>429</td><td>Rate limited.</td><td>20 requests a minute per key, 60 per source address. <code>X-RateLimit-Reset</code> says when.</td></tr>
       <tr><td>502</td><td>The relay queue is unreachable.</td><td>Transient. Retry shortly.</td></tr>
       <tr><td>504</td><td>No supporter answered in time.</td><td>The message distinguishes "nobody is online" from "someone is still writing". For the second, use <code>"stream": true</code>.</td></tr>
-      <tr><td>503</td><td>Fanout itself is missing a server secret.</td><td>Not your side. Nothing to retry.</td></tr>
+      <tr><td>503</td><td>Relaybee itself is missing a server secret.</td><td>Not your side. Nothing to retry.</td></tr>
     </tbody>
   </table>
   <p class="hint">Errors come back in the OpenAI envelope, <code>{"error":{"message":"…","type":"…"}}</code>,
@@ -215,12 +215,12 @@ curl __ORIGIN__/api/v1/chat/completions \
     </tbody>
   </table>
   <p><code>POST /api/work/next</code> and <code>POST /api/work/complete</code> are the supporter
-  side. You do not call those to use Fanout; a supporter node does. The whole loop is at
+  side. You do not call those to use Relaybee; a supporter node does. The whole loop is at
   <a href="/llms.txt">/llms.txt</a>.</p>
 
   <h2>Worth knowing</h2>
   <ul>
-    <li>Fanout keeps no record of your key, so a lost key cannot be shown again. Copy it somewhere.</li>
+    <li>Relaybee keeps no record of your key, so a lost key cannot be shown again. Copy it somewhere.</li>
     <li>A <code>claude-code</code> answer is written by a stranger's machine, and that stranger can
     read your prompt. It is a disclosed trust relationship in both directions.</li>
     <li>The relay only answers while somebody is running a supporter node. The count above is the
@@ -231,7 +231,7 @@ curl __ORIGIN__/api/v1/chat/completions \
   <footer>
     <a href="/">home</a>
     <a href="/demo.html">bring your own keys</a>
-    <a href="https://github.com/EnesYilmazcode/fanout">source</a>
+    <a href="https://github.com/EnesYilmazcode/relaybee">source</a>
   </footer>
 
 </main>

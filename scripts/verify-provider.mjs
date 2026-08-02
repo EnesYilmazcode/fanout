@@ -16,14 +16,14 @@
 //   --base      the deployment to test           (default: production)
 //
 // Costs a few tokens, one non-streaming call and one streaming call. The key is
-// sent to the Fanout deployment you name and to that provider, and nowhere else.
+// sent to the Relaybee deployment you name and to that provider, and nowhere else.
 // It is never written to disk or printed.
 
 const args = new Map()
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ''), process.argv[i + 1])
 
 const PROVIDER = args.get('provider') ?? 'anthropic'
-const BASE = (args.get('base') ?? 'https://fanout-tawny.vercel.app').replace(/\/$/, '')
+const BASE = (args.get('base') ?? 'https://relaybee-tawny.vercel.app').replace(/\/$/, '')
 const DEFAULT_MODEL = {
   anthropic: 'claude-opus-5',
   openai: 'gpt-4o-mini',
@@ -64,30 +64,30 @@ t('the deployment is up', health.ok === true)
 t('the provider is one it knows about', health.providers.includes(PROVIDER), health.providers.join(', '))
 
 const mint = await (await post('/api/keys/issue', {})).json()
-t('minted a Fanout key', typeof mint.key === 'string' && mint.key.startsWith('fo_live_'))
+t('minted a Relaybee key', typeof mint.key === 'string' && mint.key.startsWith('fo_live_'))
 const auth = { authorization: `Bearer ${mint.key}` }
 
 const sealed = await (await post('/api/connect', { provider: PROVIDER, apiKey: KEY, label: 'verify' }, auth)).json()
 t('the provider key sealed into a connection blob', typeof sealed.connection === 'string' && sealed.connection.startsWith('fc_'), sealed.error?.message ?? '')
 if (!sealed.connection) { console.log('\ncannot continue without a sealed connection'); process.exit(1) }
-const withConn = { ...auth, 'x-fanout-connection': sealed.connection }
+const withConn = { ...auth, 'x-relaybee-connection': sealed.connection }
 
 console.log('\nnon-streaming completion')
 const t0 = Date.now()
 const res = await post('/api/v1/chat/completions', {
   model: `${PROVIDER}/${MODEL}`,
-  messages: [{ role: 'user', content: 'Reply with exactly the word: FANOUT_OK' }],
+  messages: [{ role: 'user', content: 'Reply with exactly the word: RELAYBEE_OK' }],
   max_tokens: 20,
 }, withConn)
 const body = await res.text()
 let json = null
 try { json = JSON.parse(body) } catch {}
-console.log(`   ${res.status} in ${Date.now() - t0}ms, served by ${res.headers.get('x-fanout-provider')} / ${res.headers.get('x-fanout-connection-label')}`)
+console.log(`   ${res.status} in ${Date.now() - t0}ms, served by ${res.headers.get('x-relaybee-provider')} / ${res.headers.get('x-relaybee-connection-label')}`)
 t('a real provider returned a real completion', res.status === 200, body.slice(0, 300))
 t('the response is OpenAI-shaped', json?.object === 'chat.completion' && typeof json?.choices?.[0]?.message?.content === 'string')
-t('the model actually answered', /FANOUT_OK/.test(json?.choices?.[0]?.message?.content ?? ''), JSON.stringify(json?.choices?.[0]?.message?.content))
+t('the model actually answered', /RELAYBEE_OK/.test(json?.choices?.[0]?.message?.content ?? ''), JSON.stringify(json?.choices?.[0]?.message?.content))
 t('usage was translated, not dropped', typeof json?.usage?.total_tokens === 'number' && json.usage.total_tokens > 0, JSON.stringify(json?.usage))
-t('pool health reports the connection', (res.headers.get('x-fanout-pool-health') ?? '').includes('verify'), res.headers.get('x-fanout-pool-health') ?? 'none')
+t('pool health reports the connection', (res.headers.get('x-relaybee-pool-health') ?? '').includes('verify'), res.headers.get('x-relaybee-pool-health') ?? 'none')
 
 console.log('\nstreaming completion')
 const sres = await post('/api/v1/chat/completions', {

@@ -1,6 +1,6 @@
-# Contributing to Fanout
+# Contributing to Relaybee
 
-Thanks for helping out. Fanout is a small, deliberately dependency-free codebase, so
+Thanks for helping out. Relaybee is a small, deliberately dependency-free codebase, so
 contributions are easy to run and review. Please read this whole page before you open a PR.
 
 ## Getting set up

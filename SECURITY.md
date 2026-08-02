@@ -1,6 +1,6 @@
 # Security Policy
 
-Fanout is a small proxy with a deliberately narrow trusted surface. This file says how to report a
+Relaybee is a small proxy with a deliberately narrow trusted surface. This file says how to report a
 problem privately, what we consider in scope, and where the honest limits are.
 
 ## Reporting a vulnerability
@@ -20,14 +20,14 @@ These are the parts where a break matters, and where we want to hear from you.
 
 ### HMAC key signing
 
-A Fanout key is an HMAC signature over its own payload, verified by recompute, with no user table
+A Relaybee key is an HMAC signature over its own payload, verified by recompute, with no user table
 behind it (`lib/auth.ts`). A forgery that verifies is a full break. That includes minting a valid
 key without the master secret, swapping the payload while keeping a valid signature, escalating a
 tier from `free` to `pro`, or moving the expiry.
 
 ### AES-GCM sealed connection blobs
 
-A provider key is sealed into an AES-256-GCM blob that the client holds; Fanout keeps no copy
+A provider key is sealed into an AES-256-GCM blob that the client holds; Relaybee keeps no copy
 (`lib/seal.ts`). Each blob is bound to the user who sealed it as AES-GCM
 additional authenticated data, so it is unusable by anyone but its owner. In scope: decrypting a blob without the
 encryption key, using one user's blob under another user's key, or any tampering with the IV,
@@ -48,7 +48,7 @@ the only capability to complete it.
 - Anything requiring the server's environment secrets (`MASTER_SECRET`,
   `MASTER_ENCRYPTION_KEY`). If those leak, everything signed or sealed under them is void, and that
   is understood.
-- Provider-side behavior once a request leaves Fanout.
+- Provider-side behavior once a request leaves Relaybee.
 
 ## Known limits
 
@@ -60,7 +60,7 @@ surprise, and so the trust model is clear before you rely on it.
   it expires. Rotating the master secret invalidates every key at once, which is the only lever.
 - **Rate limiting is per instance and approximate.** The limiter is a sliding window held in the
   memory of one warm instance. It resets on a cold start and does not add up across regions. It
-  protects Fanout's own invocation quota against a single source. It does not stop a distributed
+  protects Relaybee's own invocation quota against a single source. It does not stop a distributed
   caller and is not meant to.
 - **The relay is a plaintext trust relationship.** A supporter answering `claude-code` requests
   reads the prompts they are handed, and the caller reads the supporter's answer. There is no

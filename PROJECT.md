@@ -1,4 +1,4 @@
-# Fanout — project board
+# Relaybee — project board
 
 Living status doc. Updated in the same commit as the change it describes, so the board is never
 stale relative to the code. Newest entries at the top of each log.
@@ -31,7 +31,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 13 | Fixed catch-all routing that 404'd the main endpoint | `fix(api)` |
 | 14 | Adversarial security review of the live deployment | — |
 | 15 | Pool cap, per-IP metering, label sanitisation | `fix(security)` |
-| 16 | `X-Fanout-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
+| 16 | `X-Relaybee-Pool-Health` header — per-connection outcomes on every response | `feat(api)` |
 | 17 | Static setup page — mint, seal, one copyable config block, strict CSP | `feat(web)` |
 | 18 | Homepage redesign — light, minimal, key-first, auto-mint; demo moved to `/demo.html` | `feat(web)` |
 | 19 | Supporter relay — `claude-code` model + work queue + worker brief, two-mode homepage | `feat(relay)` |
@@ -80,7 +80,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 62 | Poll window aligned to the BRPOP cap, heartbeat throttled, cost model corrected | `perf(relay)` (#74) |
 | 63 | Hosted API docs at `/docs.html` — every example filled with the reader's own key, plus a live relay test on the page | `docs(web)` |
 
-### Resolved: Fanout is a personal capacity router
+### Resolved: Relaybee is a personal capacity router
 
 The parked P0 — personal router or marketplace — was put to a five-perspective design review
 on 2026-07-30 (full report: `docs/design/2026-07-30-dashboard-panel.md`). The verdict was
@@ -99,7 +99,7 @@ unanimous: **personal capacity router.** Both supporter mechanisms are dead as p
   the npm package.
 
 What replaces "supporters": sharing with people you know goes through the provider, not through
-Fanout — invite them into your Anthropic/OpenAI organization so they hold their own key and seal
+Relaybee — invite them into your Anthropic/OpenAI organization so they hold their own key and seal
 their own blob. That is the one sharing mechanism provider terms are built to permit.
 
 ### Future products (explicitly separate, each with its real cost)
@@ -116,7 +116,7 @@ Not features of this codebase. If either is ever pursued, it is a new commitment
 
 | Priority | Item | Why |
 |---|---|---|
-| P0 | **Decide the relay's direction** ([#76](https://github.com/EnesYilmazcode/fanout/issues/76)) | This board says the supporter relay is dead on terms grounds. The homepage leads with it. The measurements that were missing are now attached to the issue: the free tier fits about one supporter, and real answers ranged from 4s to 283s against a 110s ceiling |
+| P0 | **Decide the relay's direction** ([#76](https://github.com/EnesYilmazcode/relaybee/issues/76)) | This board says the supporter relay is dead on terms grounds. The homepage leads with it. The measurements that were missing are now attached to the issue: the free tier fits about one supporter, and real answers ranged from 4s to 283s against a 110s ceiling |
 | P1 | End-to-end test with a **real** provider key | The largest unverified claim in the repo. The live chain reaches Anthropic and returns a real `request_id`, but no successful completion has ever come back, and `test/e2e.mts` mocks the upstream, so the Anthropic response parsing is only ever checked against a fake written from the docs. One minute and about two cents: `node scripts/verify-provider.mjs` |
 | P1 | npm client package | Mint/seal/compose-config from the terminal, mirroring the setup page. Design so a self-relay mode can be added later |
 | P2 | Retry budget per request | One bad pool of 8 blobs currently costs 8 upstream calls |
@@ -217,7 +217,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 - **Vercel Hobby prohibits commercial use.** Fine for a demo; a real service needs Pro.
 - **Rate limiting is approximate.** Per warm instance, resets on cold start, multiplies across
-  regions. It protects Fanout's invocation quota, not anyone's provider spend.
+  regions. It protects Relaybee's invocation quota, not anyone's provider spend.
 - **A leaked key is valid until it expires** (90 days). See revocation in Icebox.
 - **Rotating either secret invalidates everything** signed or sealed under it.
 - **The relay fits about one continuous supporter on Upstash free.** An idle supporter node costs
@@ -346,7 +346,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ### 2026-07-31 (README graphics + audit-driven fixes)
 
 - **README made human and visual** (#54): a hero banner and a two-sided how-it-works diagram
-  (your app -> Fanout -> your provider keys | supporters running Claude Code / Codex), both as
+  (your app -> Relaybee -> your provider keys | supporters running Claude Code / Codex), both as
   self-contained SVGs that render inline on GitHub. Intro reworked so both paths land in the
   first screen; mermaid kept as a text fallback.
 - **Deep audit** (20 verifier agents, 5 lenses: bugs / dead code / useless tests / simplification
@@ -381,7 +381,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ### 2026-07-30 (one-line supporter connect)
 
 - **The intended supporter flow** (#52): a supporter tells Claude Code one line, "Connect to
-  <site> and run as a Fanout supporter," and Claude fetches `public/llms.txt` and runs the
+  <site> and run as a Relaybee supporter," and Claude fetches `public/llms.txt` and runs the
   poll/answer/complete loop itself, minting its own key. Nothing to paste, no key to copy. The
   supporter view leads with the copyable one-liner; the full manual brief is a collapsible
   fallback. Homepage links agents at `/llms.txt`.
@@ -401,7 +401,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 - **Fifth parallel fleet** (issues #42-#44, PRs #45-#47): the end-to-end test now runs in CI, a
   `SECURITY.md` states the reporting route (GitHub private advisory), scope, and honest limits,
-  and the key/connect/proxy endpoints return a clean 503 "Fanout is not configured" when a server
+  and the key/connect/proxy endpoints return a clean 503 "Relaybee is not configured" when a server
   secret is missing instead of a generic 500. The maintainer's personal email was kept out of the
   public SECURITY.md by choice.
 
@@ -475,7 +475,7 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 ### 2026-07-30 (supporter presence)
 
 - **Live connection detection.** Each `/api/work/next` poll now heartbeats the node (keyed by
-  Fanout user id, ~45s TTL); new `GET /api/work/status` reports whether the caller's own node is
+  Relaybee user id, ~45s TTL); new `GET /api/work/status` reports whether the caller's own node is
   live. The supporter view polls it every 3s and flips from "Waiting for your node to connect…"
   to a green "Connected — your machine is answering requests" the moment the pasted worker loop
   starts. Polling stops when the view is left. Presence is per-key — no cross-user visibility.
@@ -507,7 +507,7 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 
 - **Homepage redesigned to founder's spec**: light mode, minimal, key-first. The page now IS
   the product surface — a key auto-mints on first visit, with Copy and Regenerate, a compact
-  provider row (kept because a Fanout key routes nothing without at least one sealed provider
+  provider row (kept because a Relaybee key routes nothing without at least one sealed provider
   key), the copyable config block doubling as the API docs, and backup/restore as footer
   links. Regenerate warns and clears sealed providers, since blobs only decrypt under the key
   that made them. The old dark landing/demo moved to `/demo.html`. Same strict CSP; verified
@@ -522,8 +522,8 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 - **Setup page shipped** at `/setup.html` — mint, seal, and one copyable config block
   (env / curl / Python / JS), localStorage-backed with download/restore backup, strict CSP,
   no login and no backend changes. Verified in a real browser under the CSP: 12 checks.
-- **`X-Fanout-Pool-Health` response header** — every attempt's outcome in walk order
-  (`work:429, personal:ok`) on success and failure paths. Fanout's custom headers are now
+- **`X-Relaybee-Pool-Health` response header** — every attempt's outcome in walk order
+  (`work:429, personal:ok`) on success and failure paths. Relaybee's custom headers are now
   CORS-exposed so cross-origin callers can read them. Five new smoke assertions (27 total).
 
 ### 2026-07-29
@@ -539,7 +539,7 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
 - **Security review** of the live deployment. Crypto model survived every attack; two abuse paths
   found and fixed (pool cap, per-IP metering) plus one latent header-injection vector closed.
   Regression tests added for all three. Full detail in the Security review section above.
-- **Failover confirmed working live** — an 8-connection pool returns `X-Fanout-Attempts: 8`,
+- **Failover confirmed working live** — an 8-connection pool returns `X-Relaybee-Attempts: 8`,
   proving the proxy actually walks the pool rather than giving up on the first failure.
 - **Deployed to production** at https://relaybee.vercel.app, with the GitHub repo connected
   so pushes deploy themselves. Secrets are set for all three environments.

@@ -9,7 +9,7 @@
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'" />
 <meta name="theme-color" content="#0d0f12" />
-<title>Fanout — live demo</title>
+<title>Relaybee — live demo</title>
 <meta name="description" content="One endpoint, all your keys. A stateless multi-provider AI proxy with automatic failover, running on the edge." />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/demo.css" />
@@ -17,25 +17,25 @@
 <body>
 <div class="wrap">
 
-  <h1>Fan<span>out</span></h1>
+  <h1>Relay<span>bee</span></h1>
   <p class="tag">One endpoint, all your keys. Bring your own credentials, pool them, and call any
   provider through a single OpenAI-shaped API — with no database anywhere in the stack.
   This is the interactive demo — <a href="/">the home page</a> hands you your key and one
   copyable config block.</p>
 
-  <h2>1 · Get a Fanout key</h2>
+  <h2>1 · Get a Relaybee key</h2>
   <div class="card">
     <label for="handle">Handle (cosmetic — every key gets its own isolated id)</label>
     <input id="handle" placeholder="enes" aria-label="Handle" />
-    <button id="btn-key" aria-label="Issue a Fanout key">Issue key</button>
+    <button id="btn-key" aria-label="Issue a Relaybee key">Issue key</button>
     <pre id="out-key"></pre>
   </div>
 
   <h2>2 · Connect a provider</h2>
   <div class="card">
     <p style="margin:0;color:var(--dim);font-size:13px">
-      Your provider key is encrypted and handed straight back to you. Fanout stores nothing —
-      the blob lives in your browser, and it only decrypts for the Fanout key that made it.
+      Your provider key is encrypted and handed straight back to you. Relaybee stores nothing —
+      the blob lives in your browser, and it only decrypts for the Relaybee key that made it.
     </p>
     <div class="row">
       <div>
@@ -71,19 +71,19 @@
   <h2>Drop it into your app</h2>
   <div class="card">
     <p style="margin:0 0 14px;color:var(--dim);font-size:13px">
-      <strong style="color:var(--ink)">Nothing to install.</strong> Fanout speaks OpenAI's wire
-      format, so the SDK you already use works — point <code>baseURL</code> at Fanout and go.
+      <strong style="color:var(--ink)">Nothing to install.</strong> Relaybee speaks OpenAI's wire
+      format, so the SDK you already use works — point <code>baseURL</code> at Relaybee and go.
       Switching providers is editing one string.
     </p>
 <pre style="color:var(--ink)">import OpenAI from 'openai'
 
-const fanout = new OpenAI({
+const relaybee = new OpenAI({
   baseURL: '$ORIGIN/api/v1',
-  apiKey: process.env.FANOUT_KEY,
-  defaultHeaders: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
+  apiKey: process.env.RELAYBEE_KEY,
+  defaultHeaders: { 'X-Relaybee-Connection': process.env.RELAYBEE_CONNECTIONS },
 })
 
-await fanout.chat.completions.create({
+await relaybee.chat.completions.create({
   model: 'anthropic/claude-opus-5',   // -> openai/gpt-4o -> groq/llama-3.3-70b-versatile
   messages: [{ role: 'user', content: 'hi' }],
 })</pre>
@@ -91,13 +91,13 @@ await fanout.chat.completions.create({
       Same in Python, the Vercel AI SDK, or raw HTTP — it's two headers and a JSON body:
     </p>
 <pre style="color:var(--ink)">curl $ORIGIN/api/v1/chat/completions \
-  -H "Authorization: Bearer $FANOUT_KEY" \
-  -H "X-Fanout-Connection: $CONN_A,$CONN_B" \
+  -H "Authorization: Bearer $RELAYBEE_KEY" \
+  -H "X-Relaybee-Connection: $CONN_A,$CONN_B" \
   -H "Content-Type: application/json" \
   -d '{"model":"anthropic/claude-opus-5",
        "messages":[{"role":"user","content":"hi"}]}'</pre>
     <p style="margin:14px 0 0;color:var(--dim);font-size:13px">
-      Comma-separate connections to pool them. Fanout picks one at random and fails over to the
+      Comma-separate connections to pool them. Relaybee picks one at random and fails over to the
       next when a provider returns 401, 429, or 5xx — so your pool behaves like one key with the
       combined quota. Response headers tell you which one served you and how each attempt went.
     </p>
@@ -105,7 +105,7 @@ await fanout.chat.completions.create({
 
   <footer>
     Stateless by construction: keys are HMAC signatures, connections are AES-GCM blobs you hold.
-    A demo, not a production service — read the <a href="https://github.com/EnesYilmazcode/fanout">source</a>
+    A demo, not a production service — read the <a href="https://github.com/EnesYilmazcode/relaybee">source</a>
     before you trust it with a real credential. Every endpoint and error is written up in
     <a href="/docs.html">the docs</a>.
   </footer>

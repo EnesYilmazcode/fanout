@@ -1,6 +1,6 @@
 // Supporter side of the relay: long-poll for the next queued chat job.
 //
-// Auth is an ordinary Fanout key — a supporter is just a user who polls. The
+// Auth is an ordinary Relaybee key — a supporter is just a user who polls. The
 // response is the raw job (id, model, messages); 204 means nothing came in
 // during the poll window, poll again. Supporters see prompts in plaintext:
 // that is inherent to the relay and is disclosed where the worker is set up.
@@ -56,7 +56,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   const auth = await verifyKey(bearer(req))
   if (!auth) {
-    return new Response(JSON.stringify({ error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } }), {
+    return new Response(JSON.stringify({ error: { message: 'Missing or invalid Relaybee API key.', type: 'authentication_error' } }), {
       status: 401, headers: { 'content-type': 'application/json', ...CORS },
     })
   }

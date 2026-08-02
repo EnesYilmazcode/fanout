@@ -1,4 +1,4 @@
-// Mint a Fanout API key. This is a signature, not a database write — see lib/auth.ts.
+// Mint a Relaybee API key. This is a signature, not a database write — see lib/auth.ts.
 
 import { issueKey } from '../../lib/auth'
 import { check, clientIp, IP_ISSUE_LIMIT } from '../../lib/ratelimit'
@@ -73,7 +73,7 @@ async function handleIssue(req: Request): Promise<Response> {
       user_id: userId,
       tier: 'free',
       expires_in_days: 90,
-      note: 'Store this now. Fanout keeps no record of it and cannot show it again.',
+      note: 'Store this now. Relaybee keeps no record of it and cannot show it again.',
     }),
     { headers: { 'content-type': 'application/json', ...CORS } },
   )

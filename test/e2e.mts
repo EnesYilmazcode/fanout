@@ -111,7 +111,7 @@ async function supporter(key: string) {
 
 console.log('\ne2e — mint a key over HTTP')
 const mint = await (await post('/api/keys/issue', {}, { 'x-forwarded-for': '10.0.0.2' })).json()
-t('minting returns a fo_live_ key', typeof mint.key === 'string' && mint.key.startsWith('fo_live_'))
+t('minting returns a rb_live_ key', typeof mint.key === 'string' && mint.key.startsWith('rb_live_'))
 const KEY = mint.key
 const clientAuth = { authorization: `Bearer ${KEY}`, 'x-forwarded-for': '10.0.0.2' }
 
@@ -159,25 +159,25 @@ console.log('\ne2e — failure (c): a blob sealed under one key is rejected 403 
 {
   const sealed = await (await post('/api/connect', { provider: 'anthropic', apiKey: 'sk-ant-victim99', label: 'victim' }, clientAuth)).json()
   t('the victim blob seals for its owner', typeof sealed.connection === 'string' && sealed.connection.startsWith('fc_'))
-  // A different Fanout key presents the same blob. The AAD owner-binding makes it
+  // A different Relaybee key presents the same blob. The AAD owner-binding makes it
   // undecryptable for anyone but the sealer, so the pool opens to nothing -> 403.
   const otherAuth = { authorization: `Bearer ${supKey}`, 'x-forwarded-for': '10.9.9.9' }
   const r = await post('/api/v1/chat/completions', {
     model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'not mine' }],
-  }, { ...otherAuth, 'x-fanout-connection': sealed.connection })
+  }, { ...otherAuth, 'x-relaybee-connection': sealed.connection })
   const j = await r.json()
   t('cross-key blob use is rejected with 403', r.status === 403, `status=${r.status}`)
   t('403 is a permission_error envelope', j.error?.type === 'permission_error')
 }
 
-console.log('\ne2e — failure (d): provider model with no X-Fanout-Connection -> clear 4xx')
+console.log('\ne2e — failure (d): provider model with no X-Relaybee-Connection -> clear 4xx')
 {
   const r = await post('/api/v1/chat/completions', {
     model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }],
   }, clientAuth)
   const j = await r.json()
   t('missing connection is a clear 4xx', r.status === 400, `status=${r.status}`)
-  t('the message tells the caller to send X-Fanout-Connection', /x-fanout-connection/i.test(j.error?.message ?? ''))
+  t('the message tells the caller to send X-Relaybee-Connection', /x-relaybee-connection/i.test(j.error?.message ?? ''))
 }
 
 // --- now bring a supporter online and run the happy path ---------------------
@@ -197,7 +197,7 @@ const j1 = await r1.json()
 t('relay request succeeds', r1.status === 200, `status=${r1.status}`)
 t('answer comes from the supporter', j1.choices?.[0]?.message?.content === 'SUPPORTER_REPLY: relay-please', JSON.stringify(j1.choices?.[0] ?? j1))
 t('response is OpenAI-shaped', j1.object === 'chat.completion' && j1.choices[0].finish_reason === 'stop')
-t('served-by header names the relay', r1.headers.get('x-fanout-provider') === 'claude-code')
+t('served-by header names the relay', r1.headers.get('x-relaybee-provider') === 'claude-code')
 
 console.log('\ne2e — claude-code streaming')
 const r2 = await post('/api/v1/chat/completions', {
@@ -248,7 +248,7 @@ const conn = await (await post('/api/connect', { provider: 'anthropic', apiKey: 
 t('provider key seals into a blob', typeof conn.connection === 'string' && conn.connection.startsWith('fc_'))
 const r3 = await post('/api/v1/chat/completions', {
   model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'hi' }],
-}, { ...clientAuth, 'x-fanout-connection': conn.connection })
+}, { ...clientAuth, 'x-relaybee-connection': conn.connection })
 const j3 = await r3.json()
 globalThis.fetch = realFetch
 t('byo request succeeds', r3.status === 200, `status=${r3.status}`)

@@ -51,7 +51,7 @@ t('cancelling an already-popped job is harmless', true)
 console.log('\nupstash — stale jobs are dropped (regression guard for #55)')
 // Push a job older than JOB_MAX_AGE_MS straight into the store, the way a queue
 // that filled while nobody was online would look.
-await fake.raw(['LPUSH', 'fanout:jobs', JSON.stringify({
+await fake.raw(['LPUSH', 'relaybee:jobs', JSON.stringify({
   id: 'stale-1', model: 'claude-code', messages: [{ role: 'user', content: 'old' }],
   queuedAt: Date.now() - 5 * 60_000,
 })])

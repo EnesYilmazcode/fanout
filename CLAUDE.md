@@ -1,6 +1,6 @@
-# Fanout — working notes for Claude
+# Relaybee — working notes for Claude
 
-Fanout is one OpenAI-shaped endpoint with two ways to get an answer:
+Relaybee is one OpenAI-shaped endpoint with two ways to get an answer:
 1. **Bring your own keys** — route to Anthropic / OpenAI / Groq with credentials the caller
    supplies, sealed into client-held blobs, pooled with failover.
 2. **Supporter relay** — call the `claude-code` model and a supporter's machine (running a

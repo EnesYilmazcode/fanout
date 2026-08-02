@@ -6,10 +6,13 @@ const $ = (id) => document.getElementById(id)
 const show = (el, v) => { el.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2) }
 const origin = location.origin
 
-let fanoutKey = localStorage.getItem('fanout_key') || ''
-let connections = JSON.parse(localStorage.getItem('fanout_conns') || '[]')
+// fanout_key and fanout_conns are the pre-rename names. Read them once so an
+// existing key and its sealed connections survive: blobs only decrypt under the
+// key that made them, so losing the key here would strand every one of them.
+let relaybeeKey = localStorage.getItem('relaybee_key') || localStorage.getItem('fanout_key') || ''
+let connections = JSON.parse(localStorage.getItem('relaybee_conns') || localStorage.getItem('fanout_conns') || '[]')
 
-if (fanoutKey) show($('out-key'), fanoutKey)
+if (relaybeeKey) show($('out-key'), relaybeeKey)
 renderPool()
 
 document.querySelectorAll('pre').forEach((p) => {
@@ -20,7 +23,7 @@ function renderPool() {
   $('pool').textContent = connections.length
     ? `pool: ${connections.map((c) => `${c.provider}:${c.label || 'unnamed'}`).join('  ·  ')}`
     : ''
-  localStorage.setItem('fanout_conns', JSON.stringify(connections))
+  localStorage.setItem('relaybee_conns', JSON.stringify(connections))
 }
 
 async function post(path, body, key) {
@@ -40,8 +43,8 @@ $('btn-key').onclick = async () => {
   try {
     const { json } = await post('/api/keys/issue', { handle: $('handle').value })
     if (json.key) {
-      fanoutKey = json.key
-      localStorage.setItem('fanout_key', fanoutKey)
+      relaybeeKey = json.key
+      localStorage.setItem('relaybee_key', relaybeeKey)
     }
     show($('out-key'), json)
   } catch (e) { show($('out-key'), String(e)) }
@@ -49,14 +52,14 @@ $('btn-key').onclick = async () => {
 }
 
 $('btn-connect').onclick = async () => {
-  if (!fanoutKey) return show($('out-connect'), 'Issue a Fanout key first.')
+  if (!relaybeeKey) return show($('out-connect'), 'Issue a Relaybee key first.')
   const btn = $('btn-connect'); btn.disabled = true
   try {
     const { json } = await post('/api/connect', {
       provider: $('provider').value,
       apiKey: $('provider-key').value,
       label: $('label').value,
-    }, fanoutKey)
+    }, relaybeeKey)
     if (json.connection) {
       connections.push({ blob: json.connection, provider: json.provider, label: json.label })
       $('provider-key').value = ''
@@ -68,7 +71,7 @@ $('btn-connect').onclick = async () => {
 }
 
 $('btn-run').onclick = async () => {
-  if (!fanoutKey) return show($('out-run'), 'Issue a Fanout key first.')
+  if (!relaybeeKey) return show($('out-run'), 'Issue a Relaybee key first.')
   if (!connections.length) return show($('out-run'), 'Seal at least one connection first.')
   const btn = $('btn-run'); btn.disabled = true
   show($('out-run'), 'streaming…')
@@ -77,8 +80,8 @@ $('btn-run').onclick = async () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${fanoutKey}`,
-        'x-fanout-connection': connections.map((c) => c.blob).join(','),
+        authorization: `Bearer ${relaybeeKey}`,
+        'x-relaybee-connection': connections.map((c) => c.blob).join(','),
       },
       body: JSON.stringify({
         model: $('model').value,
@@ -89,8 +92,8 @@ $('btn-run').onclick = async () => {
 
     if (!res.ok || !res.body) return show($('out-run'), await res.text())
 
-    const served = res.headers.get('x-fanout-connection-label')
-    let text = served ? `[served by ${res.headers.get('x-fanout-provider')} · ${served}]\n\n` : ''
+    const served = res.headers.get('x-relaybee-connection-label')
+    let text = served ? `[served by ${res.headers.get('x-relaybee-provider')} · ${served}]\n\n` : ''
     show($('out-run'), text)
 
     const reader = res.body.getReader()

@@ -30,7 +30,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json(405, { error: { message: 'Use POST.' } })
 
   const auth = await verifyKey(bearer(req))
-  if (!auth) return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
+  if (!auth) return json(401, { error: { message: 'Missing or invalid Relaybee API key.', type: 'authentication_error' } })
   const rl = check(`complete:${clientIp(req)}`, IP_COMPLETE_LIMIT)
   const rlh = rlHeaders(rl)
   if (!rl.ok) {

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero.svg" alt="Fanout: one API key, every provider, or let a supporter answer" width="760">
+  <img src="docs/hero.svg" alt="Relaybee: one API key, every provider, or let a supporter answer" width="760">
 </p>
 
 <p align="center">
@@ -9,20 +9,20 @@
 
 ---
 
-Fanout is a small proxy. Point any OpenAI-compatible app at it and it forwards your chat
+Relaybee is a small proxy. Point any OpenAI-compatible app at it and it forwards your chat
 requests to a real provider. Your key is a signed token, and your provider credentials are
 encrypted and handed back to you to keep. There is nothing on the server to leak and no account
 to make.
 
 There are two ways to get an answer, and you pick per request by the model name:
 
-1. **Bring your own provider keys.** Add one or more for Anthropic, OpenAI, or Groq. Fanout pools
+1. **Bring your own provider keys.** Add one or more for Anthropic, OpenAI, or Groq. Relaybee pools
    them and fails over when one is busy or dead.
 2. **Use the `claude-code` model.** Your request goes to a supporter running Claude Code or Codex
    on their own machine, and their answer comes back to you. No provider key needed on your side.
 
 <p align="center">
-  <img src="docs/how-it-works.svg" alt="Your app sends one fo_live_ key to Fanout, which routes to your provider keys or to a supporter" width="900">
+  <img src="docs/how-it-works.svg" alt="Your app sends one fo_live_ key to Relaybee, which routes to your provider keys or to a supporter" width="900">
 </p>
 
 ## Get started in 30 seconds
@@ -38,13 +38,13 @@ From code it is three lines of setup. Any OpenAI client works:
 ```js
 import OpenAI from 'openai'
 
-const fanout = new OpenAI({
+const relaybee = new OpenAI({
   baseURL: 'https://relaybee.vercel.app/api/v1',
-  apiKey: process.env.FANOUT_KEY,
-  defaultHeaders: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
+  apiKey: process.env.RELAYBEE_KEY,
+  defaultHeaders: { 'X-Relaybee-Connection': process.env.RELAYBEE_CONNECTIONS },
 })
 
-const res = await fanout.chat.completions.create({
+const res = await relaybee.chat.completions.create({
   model: 'anthropic/claude-opus-5',
   messages: [{ role: 'user', content: 'hi' }],
 })
@@ -58,14 +58,14 @@ real question usually takes 20 to 30 seconds, and a buffered response has to giv
 because the platform requires one to start within 25 seconds. Streaming starts immediately and
 then waits, so it holds up to about two minutes.
 
-![The Fanout homepage](docs/homepage.png)
+![The Relaybee homepage](docs/homepage.png)
 
 ## Become a supporter
 
 You can answer other people's `claude-code` requests from your own machine. The whole setup is
 one line. Tell Claude Code or Codex:
 
-> Connect to https://relaybee.vercel.app and run as a Fanout supporter.
+> Connect to https://relaybee.vercel.app and run as a Relaybee supporter.
 
 Claude fetches the site's instructions from [`/llms.txt`](https://relaybee.vercel.app/llms.txt),
 mints its own key, and starts a background loop. There is nothing to paste and no key to copy.
@@ -84,9 +84,9 @@ view also has the full steps to paste by hand.)
 
 Two ideas keep it simple:
 
-- Your Fanout key is a signed token. Checking it is one hash, so there is no user table and no
+- Your Relaybee key is a signed token. Checking it is one hash, so there is no user table and no
   lookup.
-- Your provider key is sealed into an encrypted blob that only your key can open. Fanout keeps no
+- Your provider key is sealed into an encrypted blob that only your key can open. Relaybee keeps no
   copy, so there is nothing on the server to leak.
 
 The relay adds one stateful piece: a job queue. A `claude-code` request is parked there, a
@@ -94,7 +94,7 @@ supporter long-polls it, answers, and the answer is handed back to the original 
 
 ```mermaid
 flowchart LR
-  A[Your app] -->|OpenAI style request| F[Fanout]
+  A[Your app] -->|OpenAI style request| F[Relaybee]
   F -->|your key| P1[Anthropic]
   F -->|your key| P2[OpenAI]
   F -->|your key| P3[Groq]
@@ -110,7 +110,7 @@ For a fuller tour of the design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| POST | `/api/keys/issue` | Make a Fanout key |
+| POST | `/api/keys/issue` | Make a Relaybee key |
 | POST | `/api/connect` | Seal a provider key into a blob you keep |
 | POST | `/api/v1/chat/completions` | The proxy, OpenAI compatible, streaming supported |
 | GET | `/api/v1/models` | List providers |

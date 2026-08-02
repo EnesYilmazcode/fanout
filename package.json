@@ -1,5 +1,5 @@
 {
-  "name": "fanout",
+  "name": "relaybee",
   "version": "0.1.0",
   "private": true,
   "description": "Personal AI capacity router — one endpoint, all your keys, automatic failover.",

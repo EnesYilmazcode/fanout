@@ -1,6 +1,6 @@
 // Provider adapters.
 //
-// Fanout speaks OpenAI's wire format as its canonical API, because every client
+// Relaybee speaks OpenAI's wire format as its canonical API, because every client
 // SDK already does. Each adapter translates that shape out to its provider and
 // translates the answer (and the SSE stream) back.
 //
@@ -126,7 +126,7 @@ const anthropic: Adapter = {
   translateStream(upstream, model, includeUsage) {
     return new ReadableStream({
       async start(controller) {
-        let id = 'chatcmpl-fanout'
+        let id = 'chatcmpl-relaybee'
         // Anthropic reports token counts across the stream: input_tokens arrives
         // in message_start, output_tokens accumulates in each message_delta.
         // We track them so a caller that opted in can get a final usage chunk.

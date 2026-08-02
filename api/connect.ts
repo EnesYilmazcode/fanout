@@ -46,7 +46,7 @@ async function handleConnect(req: Request): Promise<Response> {
 
   const auth = await verifyKey(bearer(req))
   if (!auth) {
-    return json(401, { error: { message: 'Missing or invalid Fanout API key.', type: 'authentication_error' } })
+    return json(401, { error: { message: 'Missing or invalid Relaybee API key.', type: 'authentication_error' } })
   }
 
   let payload: { provider?: string; apiKey?: string; api_key?: string; label?: string }
@@ -68,7 +68,7 @@ async function handleConnect(req: Request): Promise<Response> {
     return json(400, { error: { message: 'Field "apiKey" is required.' } })
   }
 
-  // The label is echoed back in the x-fanout-connection-label response header,
+  // The label is echoed back in the x-relaybee-connection-label response header,
   // so control characters here would be a header-injection vector. Strip to
   // printable ASCII at the point of sealing rather than trusting the read path.
   const label = (payload.label ?? '').replace(/[^\x20-\x7E]/g, '').slice(0, 40)
@@ -85,7 +85,7 @@ async function handleConnect(req: Request): Promise<Response> {
     connection: blob,
     provider,
     label: label || null,
-    usage: 'Send this in the X-Fanout-Connection header. Comma-separate several to pool them.',
+    usage: 'Send this in the X-Relaybee-Connection header. Comma-separate several to pool them.',
     note: 'Bound to your key. Another user replaying this blob gets a decryption failure, not your credits.',
   })
 }

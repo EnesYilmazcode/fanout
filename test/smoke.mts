@@ -22,14 +22,14 @@ const t = (name: string, cond: boolean, extra = '') => {
 
 console.log('\nauth — keys verify without a datastore')
 const key = await issueKey('enes_abc123', 'free')
-t('issued key carries the fo_live_ prefix', key.startsWith('fo_live_'))
+t('issued key carries the rb_live_ prefix', key.startsWith('rb_live_'))
 const payload = await verifyKey(key)
 t('a valid key round-trips its payload', payload?.u === 'enes_abc123' && payload?.t === 'free')
 // The 90-day TTL is a real promise (the issue endpoint advertises expires_in_days: 90),
 // so pin the gap between issued-at and expiry rather than trusting the constant by eye.
 t('an issued key carries the 90-day TTL', payload!.e - payload!.i === 90 * 24 * 60 * 60, `${(payload!.e - payload!.i) / 86400}d`)
 t('a tampered signature is rejected', (await verifyKey(key.slice(0, -3) + 'xxx')) === null)
-t('a forged key is rejected', (await verifyKey('fo_live_nope.nope')) === null)
+t('a forged key is rejected', (await verifyKey('rb_live_nope.nope')) === null)
 t('a missing key is rejected', (await verifyKey(null)) === null)
 
 // tier and user id survive a verify round trip (free is covered above; prove 'pro' too).
@@ -40,24 +40,24 @@ t('a pro key preserves tier and user id through verify', proPayload?.u === 'enes
 // payload swap: pair one key's body with another key's signature. The HMAC is over
 // the body, so the mismatched signature must fail — you cannot lift a signature onto
 // a different (e.g. tier-escalated) payload.
-const freeBody = key.slice('fo_live_'.length).split('.')[0]
-const proSig = proKey.slice('fo_live_'.length).split('.')[1]
-t('a payload-swapped key is rejected', (await verifyKey(`fo_live_${freeBody}.${proSig}`)) === null)
+const freeBody = key.slice('rb_live_'.length).split('.')[0]
+const proSig = proKey.slice('rb_live_'.length).split('.')[1]
+t('a payload-swapped key is rejected', (await verifyKey(`rb_live_${freeBody}.${proSig}`)) === null)
 
 // junk bearer strings must fall through cleanly, never throw.
 t('an empty string is rejected', (await verifyKey('')) === null)
-t('a bearer without the fo_live_ prefix is rejected', (await verifyKey('Bearer abc.def')) === null)
-t('a prefixed key with no dot separator is rejected', (await verifyKey('fo_live_onlybody')) === null)
+t('a bearer without the rb_live_ prefix is rejected', (await verifyKey('Bearer abc.def')) === null)
+t('a prefixed key with no dot separator is rejected', (await verifyKey('rb_live_onlybody')) === null)
 
 // expiry IS enforced (lib/auth.ts checks payload.e < now), so an expired but validly
 // signed key must be rejected. Sign one directly with the same MASTER_SECRET to isolate
 // expiry as the sole reason for rejection.
 const { jsonToB64u, bytesToB64u } = await import('../lib/b64.ts')
-const signPayload = async (p: unknown): Promise<string> => {
+const signPayload = async (p: unknown, prefix = 'rb_live_'): Promise<string> => {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(process.env.MASTER_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
   const body = jsonToB64u(p)
   const sig = await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(body))
-  return `fo_live_${body}.${bytesToB64u(new Uint8Array(sig))}`
+  return `${prefix}${body}.${bytesToB64u(new Uint8Array(sig))}`
 }
 const nowSec = Math.floor(Date.now() / 1000)
 const expiredKey = await signPayload({ u: 'expired_user', t: 'free', v: 1, i: nowSec - 10_000, e: nowSec - 100 })
@@ -65,6 +65,15 @@ t('an expired key is rejected (expiry is enforced)', (await verifyKey(expiredKey
 // control: the same signer with a future expiry verifies, proving only expiry rejected it.
 const freshSigned = await signPayload({ u: 'expired_user', t: 'free', v: 1, i: nowSec - 10_000, e: nowSec + 10_000 })
 t('the same signed payload verifies when not expired', (await verifyKey(freshSigned))?.u === 'expired_user')
+
+// The project was Fanout until 2026-08-01 and minted fo_live_ keys that last 90
+// days. There is no key store to migrate, so an fo_live_ key in someone's
+// browser or supporter loop has to keep verifying or the rename silently locks
+// them out. This is the assertion that stops a future cleanup from doing that.
+const legacyKey = await signPayload({ u: 'old_user', t: 'free', v: 1, i: nowSec - 100, e: nowSec + 10_000 }, 'fo_live_')
+t('a pre-rename fo_live_ key still verifies', (await verifyKey(legacyKey))?.u === 'old_user')
+t('a tampered fo_live_ key is still rejected', (await verifyKey(legacyKey.slice(0, -3) + 'xxx')) === null)
+t('an unknown prefix is rejected', (await verifyKey('zz_live_body.sig')) === null)
 
 console.log('\nseal — credentials are bound to their owner')
 const conn = { provider: 'anthropic', apiKey: 'sk-ant-secret', owner: 'enes_abc123', createdAt: Date.now(), label: 'mine' }
@@ -175,7 +184,7 @@ t('clientIp reads x-forwarded-for', clientIp(ipReq({ 'x-forwarded-for': '1.2.3.4
 t('clientIp falls back to x-real-ip', clientIp(ipReq({ 'x-real-ip': '9.9.9.9' })) === '9.9.9.9')
 t('clientIp degrades safely', clientIp(ipReq({})) === 'unknown')
 
-// The label is echoed into the x-fanout-connection-label response header, so a
+// The label is echoed into the x-relaybee-connection-label response header, so a
 // CRLF in it would be a header-injection vector. Drive the REAL sanitizer in
 // api/connect.ts (not an inline copy of the regex): seal a dirty label through
 // the handler, then decrypt the returned blob and assert it came out printable.
@@ -217,18 +226,35 @@ const healthRes = await chatCompletions(new Request('https://x/api/v1/chat/compl
   headers: {
     'content-type': 'application/json',
     authorization: `Bearer ${healthKey}`,
-    'x-fanout-connection': `${connA},${connB}`,
+    'x-relaybee-connection': `${connA},${connB}`,
   },
   body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'ping' }] }),
 }))
 globalThis.fetch = realFetch
 
-const ph = healthRes.headers.get('x-fanout-pool-health') ?? ''
+const ph = healthRes.headers.get('x-relaybee-pool-health') ?? ''
 t('request succeeds after failover', healthRes.status === 200, `status=${healthRes.status}`)
 t('pool health lists the failed connection', ph.includes(':429'), ph)
 t('pool health lists the winner last', ph.endsWith(':ok'), ph)
-t('attempt count matches the walk', healthRes.headers.get('x-fanout-attempt') === '2')
-t('pool health is exposed to browsers', (healthRes.headers.get('access-control-expose-headers') ?? '').includes('x-fanout-pool-health'))
+t('attempt count matches the walk', healthRes.headers.get('x-relaybee-attempt') === '2')
+t('pool health is exposed to browsers', (healthRes.headers.get('access-control-expose-headers') ?? '').includes('x-relaybee-pool-health'))
+
+// The pre-rename header name is sitting in other people's env files and app
+// configs, where nothing announces that this project changed its name. It has
+// to keep routing, and the preflight has to keep allowing it.
+const legacyFetch = globalThis.fetch
+globalThis.fetch = (async () => new Response(
+  JSON.stringify({ id: 'msg_l', content: [{ type: 'text', text: 'pong' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }),
+  { status: 200, headers: { 'content-type': 'application/json' } },
+)) as typeof fetch
+const legacyHeaderRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${healthKey}`, 'x-fanout-connection': connA },
+  body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: 'ping' }] }),
+}))
+globalThis.fetch = legacyFetch
+t('the pre-rename x-fanout-connection header still routes', legacyHeaderRes.status === 200, `status=${legacyHeaderRes.status}`)
+t('the old header name is still allowed through preflight', (legacyHeaderRes.headers.get('access-control-allow-headers') ?? '').includes('x-fanout-connection'))
 
 console.log('\nsupporter relay — claude-code jobs round-trip through the queue')
 const workNext = (await import('../api/work/next.ts')).default
@@ -277,7 +303,7 @@ t('job carries no requester identity', !JSON.stringify(side.job).includes('relay
 t('delivery is accepted', side.delivered === 200)
 t('user gets the supporter answer', relayRes.status === 200 && relayJson.choices?.[0]?.message?.content === 'echo:ping-relay', JSON.stringify(relayJson.choices?.[0] ?? relayJson))
 t('relay response is OpenAI-shaped', relayJson.object === 'chat.completion' && relayJson.choices[0].finish_reason === 'stop')
-t('provider header names the relay', relayRes.headers.get('x-fanout-provider') === 'claude-code')
+t('provider header names the relay', relayRes.headers.get('x-relaybee-provider') === 'claude-code')
 
 const cycle2 = supporterCycle()
 const streamRes = await chatCompletions(relayReq({ model: 'claude-code/default', stream: true, messages: [{ role: 'user', content: 'ping-sse' }] }))
@@ -480,7 +506,7 @@ globalThis.fetch = (async () => { capUpstreamCalls++; return new Response('{}', 
 const bigContent = 'x'.repeat(MAX_BODY_BYTES + 1024)
 const oversizedRes = await chatCompletions(new Request('https://x/api/v1/chat/completions', {
   method: 'POST',
-  headers: { 'content-type': 'application/json', authorization: `Bearer ${capKey}`, 'x-fanout-connection': capConn },
+  headers: { 'content-type': 'application/json', authorization: `Bearer ${capKey}`, 'x-relaybee-connection': capConn },
   body: JSON.stringify({ model: 'anthropic/claude-opus-5', messages: [{ role: 'user', content: bigContent }] }),
 }))
 const oversizedJson = await oversizedRes.json()
@@ -493,7 +519,7 @@ t('the oversized rejection carries a {message,type} envelope', typeof oversizedJ
 t('the body cap is a sane 256KB', MAX_BODY_BYTES === 256 * 1024, `MAX_BODY_BYTES=${MAX_BODY_BYTES}`)
 console.log('\nhomepage — social share preview (Open Graph + Twitter card)')
 const indexHtml = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8')
-t('index has og:title Fanout', indexHtml.includes('property="og:title" content="Fanout"'))
+t('index has og:title Relaybee', indexHtml.includes('property="og:title" content="Relaybee"'))
 t('index has an og:description', /property="og:description" content="[^"]+"/.test(indexHtml))
 t('index declares og:type website', indexHtml.includes('property="og:type" content="website"'))
 t('index points og:image at /og.png', indexHtml.includes('property="og:image" content="/og.png"'))
@@ -554,7 +580,7 @@ t('the worker script reads the HTTP status, not just the body', /%\{http_code\}/
 t('the worker script backs off instead of spinning on an error', /sleep 15/.test(llms))
 t('the worker script checks jq is present before relying on it', /command -v jq/.test(llms))
 t('the worker script always delivers an answer, even a failed one', /could not produce an answer/.test(llms))
-t('the worker script records a pid so the stop instruction works', /fanout_worker\.pid/.test(llms))
+t('the worker script records a pid so the stop instruction works', /relaybee_worker\.pid/.test(llms))
 // The board concluded both of these carry real risk for a supporter. They belong
 // where a supporter reads, not only in PROJECT.md (#72).
 // CLAUDE.md and CONTRIBUTING both promise a strict CSP on every page, and demo.html
@@ -589,13 +615,13 @@ t('docs.html exists and is non-trivial', docsHtml.length > 2000, `len=${docsHtml
 t('docs shows the completions endpoint and the bearer header', docsHtml.includes('/api/v1/chat/completions') && /Authorization: Bearer/.test(docsHtml))
 t('docs covers the relay model', docsHtml.includes('claude-code'))
 t('docs tells relay callers to stream', /"stream":true/.test(docsHtml) && /110 seconds/.test(docsHtml))
-t('docs covers the bring-your-own-keys path', docsHtml.includes('/api/connect') && docsHtml.includes('X-Fanout-Connection'))
+t('docs covers the bring-your-own-keys path', docsHtml.includes('/api/connect') && docsHtml.includes('X-Relaybee-Connection'))
 t('docs explains the failure statuses a caller will hit', /401/.test(docsHtml) && /429/.test(docsHtml) && /504/.test(docsHtml))
 t('examples carry tokens for the page to fill in', docsHtml.includes('__KEY__') && docsHtml.includes('__ORIGIN__'))
 t('docs.js substitutes both tokens', docsJs.includes('__KEY__') && docsJs.includes('__ORIGIN__'))
-t('docs.js reads the key the homepage already stored', docsJs.includes("localStorage.getItem('fanout_key')"))
+t('docs.js reads the key the homepage already stored', docsJs.includes("localStorage.getItem('relaybee_key')"))
 t('the in-page tester streams, as the page tells readers to', /stream:\s*true/.test(docsJs))
-t('the homepage links to the docs page, not the repo readme', indexHtml.includes('/docs.html') && !indexHtml.includes('fanout#readme'))
+t('the homepage links to the docs page, not the repo readme', indexHtml.includes('/docs.html') && !indexHtml.includes('relaybee#readme'))
 t('docs page pulls in no third-party asset', !/https?:\/\/(?!github\.com)/.test(docsHtml))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)

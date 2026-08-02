@@ -1,11 +1,11 @@
 # Architecture
 
-Fanout is one OpenAI-shaped endpoint with no database on the request path. This
+Relaybee is one OpenAI-shaped endpoint with no database on the request path. This
 is a short tour of the four pieces that make that work.
 
 ```mermaid
 flowchart TD
-  App[Your app] -->|Bearer key + connection blob| F[Fanout edge function]
+  App[Your app] -->|Bearer key + connection blob| F[Relaybee edge function]
   F -->|recompute HMAC, no lookup| K{Key valid?}
   K -->|no| R[401]
   K -->|yes| Pool[Open the pooled blobs]
@@ -20,7 +20,7 @@ flowchart TD
 
 ## Stateless HMAC key
 
-A Fanout key is not a row in a table. It is a small payload (a user id, a tier,
+A Relaybee key is not a row in a table. It is a small payload (a user id, a tier,
 an expiry) plus an HMAC signature over that payload, computed with a server-held
 master secret. The key carries everything it asserts about itself.
 
@@ -38,11 +38,11 @@ PROJECT.md.
 ## AES-GCM sealed connection, bound to the owner
 
 Your provider credential never rests on the server. When you connect a provider
-key, Fanout encrypts it with AES-256-GCM under a master encryption key and hands
-the sealed blob back to you. Your browser keeps it. Fanout keeps no copy, so
+key, Relaybee encrypts it with AES-256-GCM under a master encryption key and hands
+the sealed blob back to you. Your browser keeps it. Relaybee keeps no copy, so
 there is nothing on the server to leak.
 
-The seal binds the blob to you. Your Fanout user id goes in as the AES-GCM
+The seal binds the blob to you. Your Relaybee user id goes in as the AES-GCM
 additional authenticated data, so decryption only succeeds when the same owner
 presents the blob. A blob scraped from someone else's browser fails to open and
 cannot spend their credits. This owner-binding is security-reviewed and is never
@@ -50,7 +50,7 @@ to be removed.
 
 ## Pooling proxy with failover
 
-You can attach more than one sealed blob to a single request. Fanout treats them
+You can attach more than one sealed blob to a single request. Relaybee treats them
 as a pool. It opens each blob, tries the provider, and on a retryable failure
 (401, 403, 429, or a 5xx) walks on to the next one. The first working provider
 answers.

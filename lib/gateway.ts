@@ -14,11 +14,11 @@ import { hasSecrets, NOT_CONFIGURED } from './config'
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, content-type, x-fanout-connection',
+  'access-control-allow-headers': 'authorization, content-type, x-relaybee-connection, x-fanout-connection',
   'access-control-allow-methods': 'GET, POST, OPTIONS',
   'access-control-expose-headers':
-    'x-fanout-provider, x-fanout-connection-label, x-fanout-attempt, x-fanout-attempts, ' +
-    'x-fanout-pool-size, x-fanout-pool-health, x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
+    'x-relaybee-provider, x-relaybee-connection-label, x-relaybee-attempt, x-relaybee-attempts, ' +
+    'x-relaybee-pool-size, x-relaybee-pool-health, x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset',
 }
 
 const preflight = () => new Response(null, { status: 204, headers: CORS })
@@ -38,7 +38,7 @@ async function gate(req: Request) {
 
   const auth = await verifyKey(bearer(req))
   if (!auth) {
-    return { fail: err(401, 'Missing or invalid Fanout API key. Get one from /api/keys/issue.', 'authentication_error') }
+    return { fail: err(401, 'Missing or invalid Relaybee API key. Get one from /api/keys/issue.', 'authentication_error') }
   }
   const rl = check(auth.u, LIMITS[auth.t] ?? LIMITS.free)
   const headers = rlHeaders(rl)
@@ -141,7 +141,7 @@ async function relayCompletion(body: ChatRequest, headers: Record<string, string
   }
 
   const created = Math.floor(Date.now() / 1000)
-  const relayHeaders = { ...headers, 'x-fanout-provider': RELAY_PROVIDER }
+  const relayHeaders = { ...headers, 'x-relaybee-provider': RELAY_PROVIDER }
 
   if (body.stream) return relayStream(job, body, created, relayHeaders)
 
@@ -180,7 +180,7 @@ async function timedOutMessage(known?: boolean): Promise<string> {
     try { online = (await countLive()) > 0 } catch { online = false }
   }
   return online
-    ? `A supporter took this and did not finish inside ${RELAY_WAIT_MS / 1000}s. Send "stream": true and Fanout holds the connection open while they work, which is what long answers need.`
+    ? `A supporter took this and did not finish inside ${RELAY_WAIT_MS / 1000}s. Send "stream": true and Relaybee holds the connection open while they work, which is what long answers need.`
     : 'No supporter is online right now. The relay only answers while someone is running a supporter node, so try again later, or run one yourself.'
 }
 
@@ -303,10 +303,14 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
   if (!hasSecrets('MASTER_ENCRYPTION_KEY')) return err(503, NOT_CONFIGURED, 'api_error', headers)
 
   // Connections are client-held sealed blobs. Sending several is the point:
-  // fanout rotates across them and fails over when one is rate-limited or dead.
-  const raw = (req.headers.get('x-fanout-connection') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  // relaybee rotates across them and fails over when one is rate-limited or dead.
+  // x-fanout-connection is the pre-rename name. Configs holding it live in other
+  // people's apps and env files, where nothing tells them the project changed
+  // its name, so the old header keeps working.
+  const header = req.headers.get('x-relaybee-connection') ?? req.headers.get('x-fanout-connection') ?? ''
+  const raw = header.split(',').map((s) => s.trim()).filter(Boolean)
   if (raw.length === 0) {
-    return err(400, 'Missing X-Fanout-Connection header. Create one at POST /api/connect.', 'invalid_request_error', headers)
+    return err(400, 'Missing X-Relaybee-Connection header. Create one at POST /api/connect.', 'invalid_request_error', headers)
   }
   if (raw.length > MAX_POOL) {
     return err(400, `Too many connections: ${raw.length}. At most ${MAX_POOL} may be pooled in one request.`, 'invalid_request_error', headers)
@@ -333,7 +337,7 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
   // "label:unreachable". Callers debugging a half-dead pool need to see which
   // connections failed, not just which one finally answered.
   const health: string[] = []
-  const poolHealth = () => ({ 'x-fanout-pool-health': health.join(', ') })
+  const poolHealth = () => ({ 'x-relaybee-pool-health': health.join(', ') })
 
   for (let i = 0; i < conns.length; i++) {
     const conn = conns[(start + i) % conns.length]
@@ -361,16 +365,16 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
       // caller sees the provider's own explanation.
       return new Response(lastText, {
         status: upstream.status,
-        headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(i + 1), ...poolHealth() },
+        headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-relaybee-attempts': String(i + 1), ...poolHealth() },
       })
     }
 
     health.push(`${conn.label ?? 'unnamed'}:ok`)
     const served = {
-      'x-fanout-provider': adapter.id,
-      'x-fanout-connection-label': conn.label ?? 'unnamed',
-      'x-fanout-attempt': String(i + 1),
-      'x-fanout-pool-size': String(conns.length),
+      'x-relaybee-provider': adapter.id,
+      'x-relaybee-connection-label': conn.label ?? 'unnamed',
+      'x-relaybee-attempt': String(i + 1),
+      'x-relaybee-pool-size': String(conns.length),
       ...poolHealth(),
     }
 
@@ -397,6 +401,6 @@ async function chatCompletionsInner(req: Request): Promise<Response> {
 
   return new Response(lastText, {
     status: lastStatus,
-    headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-fanout-attempts': String(conns.length), ...poolHealth() },
+    headers: { 'content-type': 'application/json', ...CORS, ...headers, 'x-relaybee-attempts': String(conns.length), ...poolHealth() },
   })
 }

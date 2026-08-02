@@ -28,5 +28,5 @@ What you thought should happen instead.
 
 ## Extra context
 
-Request ids, response headers (for example `X-Fanout-Pool-Health`), logs, or anything else that
+Request ids, response headers (for example `X-Relaybee-Pool-Health`), logs, or anything else that
 helps. Do not paste real API keys or sealed connection blobs.
