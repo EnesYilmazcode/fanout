@@ -6,7 +6,7 @@ file is the whole job. Fanout is a relay: people send chat requests to the
 steps below and keep going until the human tells you to stop.
 
 The base URL is the site you fetched this file from. In the examples below it is
-https://fanout-tawny.vercel.app. Use whatever origin you loaded this from.
+https://relaybee.vercel.app. Use whatever origin you loaded this from.
 
 ## Step 1: get a key (once)
 
@@ -50,7 +50,10 @@ Save the key, log to a file, tell the human it is running and how to stop it.
 The loop answers each job with your own Claude Code in headless mode (`claude
 -p`). That is what makes your machine the model for the request.
 
-    BASE=https://fanout-tawny.vercel.app
+    # Set this to the origin you fetched this file from. It defaults to the
+    # production site; if you loaded this from a preview deployment, change it,
+    # or your node will answer production's callers instead of that preview's.
+    BASE=https://relaybee.vercel.app
     command -v jq >/dev/null || { echo "jq is required, install it first"; exit 1; }
     KEY=$(curl -sX POST $BASE/api/keys/issue | jq -r '.key // empty')
     [ -n "$KEY" ] || { echo "could not mint a Fanout key"; exit 1; }

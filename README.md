@@ -4,7 +4,7 @@
 
 <p align="center">
   One OpenAI-shaped endpoint. Bring your own provider keys, or let a supporter answer for you.<br>
-  No signup. No database. Live at <a href="https://fanout-tawny.vercel.app">fanout-tawny.vercel.app</a>.
+  No signup. No database. Live at <a href="https://relaybee.vercel.app">relaybee.vercel.app</a>.
 </p>
 
 ---
@@ -30,7 +30,7 @@ There are two ways to get an answer, and you pick per request by the model name:
 Open the site. A key is minted for you the moment the page loads. Copy it, add a provider key if
 you want to use your own, and paste the config into your app.
 
-The [docs page](https://fanout-tawny.vercel.app/docs.html) fills every example in with your own key
+The [docs page](https://relaybee.vercel.app/docs.html) fills every example in with your own key
 and will run the first call for you, so you can check the key works before writing any code.
 
 From code it is three lines of setup. Any OpenAI client works:
@@ -39,7 +39,7 @@ From code it is three lines of setup. Any OpenAI client works:
 import OpenAI from 'openai'
 
 const fanout = new OpenAI({
-  baseURL: 'https://fanout-tawny.vercel.app/api/v1',
+  baseURL: 'https://relaybee.vercel.app/api/v1',
   apiKey: process.env.FANOUT_KEY,
   defaultHeaders: { 'X-Fanout-Connection': process.env.FANOUT_CONNECTIONS },
 })
@@ -65,9 +65,9 @@ then waits, so it holds up to about two minutes.
 You can answer other people's `claude-code` requests from your own machine. The whole setup is
 one line. Tell Claude Code or Codex:
 
-> Connect to https://fanout-tawny.vercel.app and run as a Fanout supporter.
+> Connect to https://relaybee.vercel.app and run as a Fanout supporter.
 
-Claude fetches the site's instructions from [`/llms.txt`](https://fanout-tawny.vercel.app/llms.txt),
+Claude fetches the site's instructions from [`/llms.txt`](https://relaybee.vercel.app/llms.txt),
 mints its own key, and starts a background loop. There is nothing to paste and no key to copy.
 Under the hood it just does this, over and over until you stop it:
 

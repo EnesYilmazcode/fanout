@@ -5,7 +5,7 @@ stale relative to the code. Newest entries at the top of each log.
 
 **Status:** deployed, and the relay is now verified end to end on production rather than only in
 local tests. One open question needs a decision from the owner: see P0 in Next.
-**Live URL:** https://fanout-tawny.vercel.app
+**Live URL:** https://relaybee.vercel.app
 **Last updated:** 2026-08-01
 
 ---
@@ -541,7 +541,7 @@ tested changes per run, stops when it runs out of safe work) instead of one chan
   Regression tests added for all three. Full detail in the Security review section above.
 - **Failover confirmed working live** — an 8-connection pool returns `X-Fanout-Attempts: 8`,
   proving the proxy actually walks the pool rather than giving up on the first failure.
-- **Deployed to production** at https://fanout-tawny.vercel.app, with the GitHub repo connected
+- **Deployed to production** at https://relaybee.vercel.app, with the GitHub repo connected
   so pushes deploy themselves. Secrets are set for all three environments.
 - **Fixed a production-only 404** on `/api/v1/chat/completions` caused by catch-all route depth.
   Found by smoke-testing the live deploy, not by the build.

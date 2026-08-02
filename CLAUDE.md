@@ -33,7 +33,7 @@ substitutes it into every example, and runs a live streaming relay call from the
 
 - `npm run check` = `tsc --noEmit` + `test/smoke.mts` (currently 42 assertions). It must pass
   before any commit. Add assertions when you add behavior.
-- Deploy is automatic: Vercel builds every push. **`main` → production** (`fanout-tawny.vercel.app`);
+- Deploy is automatic: Vercel builds every push. **`main` → production** (`relaybee.vercel.app`);
   every PR gets a preview URL. So merging to `main` ships.
 - GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on pushes and PRs.
 
