@@ -79,6 +79,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 61 | Supporter-side risks (untrusted prompts, plan terms) shown where supporters start | `docs` (#72) |
 | 62 | Poll window aligned to the BRPOP cap, heartbeat throttled, cost model corrected | `perf(relay)` (#74) |
 | 63 | Hosted API docs at `/docs.html` — every example filled with the reader's own key, plus a live relay test on the page | `docs(web)` |
+| 64 | Renamed to Relaybee — bee mark, `relaybee.vercel.app`, `rb_live_` keys, old key and header still accepted | `refactor(brand)` |
 
 ### Resolved: Relaybee is a personal capacity router
 
@@ -229,6 +230,35 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-01 (renamed to Relaybee)
+
+- **The name changed and the address changed.** The old one was
+  `fanout-tawny.vercel.app`, where "tawny" is a random word Vercel appends when it generates a
+  subdomain. Worth recording how the replacement was picked, because the obvious method does not
+  work: an unclaimed `*.vercel.app` subdomain and one assigned to a project with no live deployment
+  return a **byte-identical** 404, same status, same headers, same body, so probing over HTTP tells
+  you nothing. The only real test is the API refusing the add. Roughly 120 names were tested that
+  way. Every clean single dictionary word was gone, across eight metaphor families (axon, synapse,
+  plexus, semaphore, mycelium, apiary, loom, weave, spool, glean, windfall, patchwork, cairn,
+  potlatch, thread, braid). Compounds are almost all free.
+- **Three identifiers could not just be renamed**, because each one lives somewhere this repo does
+  not control. Keys were `fo_live_`, are HMAC signatures with a 90 day life, and have no store to
+  migrate, so `verifyKey` accepts both prefixes and new keys mint as `rb_live_`. The
+  `X-Fanout-Connection` header sits in other people's env files, so it still routes and is still
+  allowed through preflight. `localStorage` held `fanout_key` and `fanout_conns`, both read once
+  under the old names, since a connection blob only decrypts under the key that sealed it and
+  dropping the key would strand every blob with it. Each has an assertion, including a tampered
+  legacy key still being rejected, so a later cleanup cannot remove the compatibility by accident.
+- **The bee is drawn here, not imported.** No icon set has one: Lucide, Tabler and Phosphor all ship
+  beef and beer and no bee, and the sets that do (game-icons, Twemoji) are CC-BY, which would put an
+  attribution requirement and a foreign drawing style into a repo with neither. It is checked at
+  128, 64, 32 and 16 pixels and inverted on dark. It also flies around the homepage, hidden outright
+  under `prefers-reduced-motion`, and animated in CSS because the CSP forbids inline styles and the
+  script that would otherwise drive it.
+- Verified on production rather than locally: the deployed commit, a fresh `rb_live_` key
+  authenticating against `/api/v1/models`, the docs page filling its examples with that key, the bee
+  actually moving between two samples, and no CSP violations on either page.
 
 ### 2026-08-01 (a docs page that runs)
 
