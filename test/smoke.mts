@@ -416,15 +416,7 @@ t('connect: a forced error returns a clean 500', connectErr.status === 500)
 t('connect: the error path keeps CORS', connectErr.headers.get('access-control-allow-origin') === '*')
 t('connect: the error path carries a {message,type} envelope', typeof connectErrJson.error?.message === 'string' && typeof connectErrJson.error?.type === 'string')
 
-console.log('\ndemo page — favicon, theme-color, and a11y polish')
 const { readFileSync, existsSync } = await import('node:fs')
-const demoHtml = readFileSync(new URL('../public/demo.html', import.meta.url), 'utf8')
-t('demo references the shared /favicon.svg', demoHtml.includes('href="/favicon.svg"'))
-t('demo theme-color matches the dark --bg', demoHtml.includes('name="theme-color" content="#0d0f12"'))
-// The styles moved out of the page so a strict CSP could be applied (#77), so the
-// ring now lives in demo.css. Same guarantee, different file.
-t('demo has a visible focus-visible ring', readFileSync(new URL('../public/demo.css', import.meta.url), 'utf8').includes(':focus-visible'))
-t('demo labels interactive controls for a11y', (demoHtml.match(/aria-label=/g) || []).length >= 5)
 
 console.log('\nvercel.json — security and cache response headers')
 const vercelCfg = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
@@ -583,12 +575,11 @@ t('the worker script always delivers an answer, even a failed one', /could not p
 t('the worker script records a pid so the stop instruction works', /relaybee_worker\.pid/.test(llms))
 // The board concluded both of these carry real risk for a supporter. They belong
 // where a supporter reads, not only in PROJECT.md (#72).
-// CLAUDE.md and CONTRIBUTING both promise a strict CSP on every page, and demo.html
-// was the exception: the one page that takes a live provider secret in a form field.
-// Pin all three pages, and pin the absence of inline script/style that made it
+// CLAUDE.md and CONTRIBUTING both promise a strict CSP on every page. Pin every
+// page there is, and pin the absence of the inline script and style that made it
 // impossible before (#77).
 {
-  const pages = ['index.html', 'demo.html', '404.html', 'docs.html']
+  const pages = ['index.html', '404.html', 'docs.html']
   for (const page of pages) {
     const src = readFileSync(new URL(`../public/${page}`, import.meta.url), 'utf8')
     t(`${page} carries the strict CSP`, /http-equiv="Content-Security-Policy"/.test(src) && /default-src 'none'/.test(src))
@@ -623,6 +614,18 @@ t('docs.js reads the key the homepage already stored', docsJs.includes("localSto
 t('the in-page tester streams, as the page tells readers to', /stream:\s*true/.test(docsJs))
 t('the homepage links to the docs page, not the repo readme', indexHtml.includes('/docs.html') && !indexHtml.includes('relaybee#readme'))
 t('docs page pulls in no third-party asset', !/https?:\/\/(?!github\.com)/.test(docsHtml))
+
+// The interactive demo page was removed on 2026-08-02. A link to a page that no
+// longer exists is worse than no link, so pin both halves: the files are gone
+// and nothing points at them.
+console.log('\nsite surface — the demo page is gone and nothing links to it')
+const notFoundHtml = readFileSync(new URL('../public/404.html', import.meta.url), 'utf8')
+for (const f of ['demo.html', 'demo.css', 'demo.js']) {
+  t(`public/${f} is gone`, !existsSync(new URL(`../public/${f}`, import.meta.url)))
+}
+t('no page links to the demo', ![indexHtml, docsHtml, notFoundHtml].some((s) => s.includes('demo.html')))
+t('the homepage footer is docs and source only', (indexHtml.match(/<footer>[\s\S]*?<\/footer>/)?.[0].match(/<a /g) || []).length === 2)
+t('the supporter toggle reads Support', />Support</.test(indexHtml))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)

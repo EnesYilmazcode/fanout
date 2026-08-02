@@ -80,6 +80,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 62 | Poll window aligned to the BRPOP cap, heartbeat throttled, cost model corrected | `perf(relay)` (#74) |
 | 63 | Hosted API docs at `/docs.html` — every example filled with the reader's own key, plus a live relay test on the page | `docs(web)` |
 | 64 | Renamed to Relaybee — bee mark, `relaybee.vercel.app`, `rb_live_` keys, old key and header still accepted | `refactor(brand)` |
+| 65 | `/demo.html` removed; homepage trimmed to key, status, and two footer links | `refactor(web)` |
 
 ### Resolved: Relaybee is a personal capacity router
 
@@ -230,6 +231,23 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-02 (the site is two pages now)
+
+- **`/demo.html` is gone**, along with `demo.css` and `demo.js`. It was the original dark landing
+  page turned interactive walkthrough, and the homepage plus the docs page had both grown to cover
+  what it did, so it was a third version of the same explanation with its own CSP, its own theme
+  colour and its own a11y assertions to keep in step.
+- **Bring-your-own-keys is not gone**, only its UI. It is still a real path through the API,
+  `POST /api/connect` then the blob in a header, and section 4 of the docs page covers it with
+  copyable commands. The page that took a live provider secret in a form field was also the one
+  page that most deserved not to exist.
+- Homepage trimmed: the "how to use this key" line went (the docs link in the footer already says
+  it), the footer is now docs and source, and the mode toggle reads **Support** instead of
+  "Become a supporter".
+- Assertions replace the removed ones rather than just disappearing: the three files stay deleted,
+  and no page links to `demo.html`, because a link to a page that no longer exists is worse than no
+  link at all.
 
 ### 2026-08-01 (renamed to Relaybee)
 

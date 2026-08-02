@@ -175,7 +175,7 @@ $('mode-switch').addEventListener('click', () => {
   supporting = !supporting
   $('view-use').hidden = supporting
   $('view-support').hidden = !supporting
-  $('mode-switch').textContent = supporting ? 'Get a key' : 'Become a supporter'
+  $('mode-switch').textContent = supporting ? 'Get a key' : 'Support'
 })
 
 // --- init -----------------------------------------------------------------

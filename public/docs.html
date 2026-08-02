@@ -19,7 +19,7 @@
   <a class="brand" href="/">Relaybee</a>
   <span class="sep">/</span>
   <span class="here">docs</span>
-  <a class="right" href="/demo.html">bring your own keys</a>
+  <a class="right" href="https://github.com/EnesYilmazcode/relaybee">source</a>
 </nav>
 
 <main>
@@ -147,8 +147,8 @@ OPENAI_API_KEY=__KEY__</pre>
   <h2>4. Bringing your own provider key</h2>
   <p>The other path. Instead of a supporter, Relaybee calls Anthropic, OpenAI, or Groq with a
   credential you supply. Relaybee does not store it: the key comes back to you encrypted into a blob
-  that only your Relaybee key can open, and you send that blob on each request.</p>
-  <p>Do it in the browser at <a href="/demo.html">bring your own keys</a>, or by hand:</p>
+  that only your Relaybee key can open. Two calls, seal once and then send that blob on every
+  request.</p>
 
   <div class="snippet">
     <button class="copy" aria-label="Copy this snippet">copy</button>
@@ -230,7 +230,6 @@ curl __ORIGIN__/api/v1/chat/completions \
 
   <footer>
     <a href="/">home</a>
-    <a href="/demo.html">bring your own keys</a>
     <a href="https://github.com/EnesYilmazcode/relaybee">source</a>
   </footer>
 
