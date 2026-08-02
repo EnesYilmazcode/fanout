@@ -88,6 +88,48 @@ button.icon:disabled { opacity: 0.4; cursor: default; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } }
 
+/* The bee. Wanders the viewport, hovers now and then, flutters constantly.
+   Decorative only: aria-hidden, pointer-events none, and it never sits under a
+   control long enough to matter. Held in CSS because the CSP forbids inline
+   styles and forbids the JS that would otherwise animate it. */
+.bee {
+  position: fixed; top: 0; left: 0; width: 21px; height: 21px;
+  color: var(--dim); opacity: 0.5; pointer-events: none; z-index: 1;
+  animation: roam 52s ease-in-out infinite;
+}
+.bee svg { width: 100%; height: 100%; display: block; animation: bob 2.1s ease-in-out infinite; }
+.bee .body { fill: currentColor; }
+.bee .wings ellipse { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.bee .antennae { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.bee .stripes { stroke: var(--bg); stroke-width: 1.8; stroke-linecap: round; }
+/* Wings beat far faster than the body moves, which is what sells it as a bee
+   rather than a drifting dot. */
+.bee .wings { transform-origin: 12px 9px; animation: flutter 0.16s ease-in-out infinite; }
+
+@keyframes roam {
+  0%   { transform: translate(5vw, 80vh) rotate(0deg); }
+  8%   { transform: translate(21vw, 63vh) rotate(-13deg); }
+  13%  { transform: translate(23vw, 59vh) rotate(7deg); }
+  21%  { transform: translate(45vw, 71vh) rotate(11deg); }
+  31%  { transform: translate(69vw, 41vh) rotate(-12deg); }
+  37%  { transform: translate(71vw, 37vh) rotate(5deg); }
+  45%  { transform: translate(86vw, 61vh) rotate(15deg); }
+  55%  { transform: translate(58vw, 83vh) rotate(-7deg); }
+  63%  { transform: translate(29vw, 86vh) rotate(9deg); }
+  71%  { transform: translate(11vw, 58vh) rotate(-11deg); }
+  79%  { transform: translate(33vw, 29vh) rotate(6deg); }
+  85%  { transform: translate(35vw, 25vh) rotate(-5deg); }
+  93%  { transform: translate(65vw, 17vh) rotate(13deg); }
+  100% { transform: translate(5vw, 80vh) rotate(0deg); }
+}
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-2.5px) rotate(3deg); } }
+@keyframes flutter { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.55); } }
+
+/* A bee circling the page is exactly what motion sensitivity means. Park it. */
+@media (prefers-reduced-motion: reduce) {
+  .bee { display: none; }
+}
+
 footer {
   margin-top: 64px; display: flex; gap: 18px; justify-content: center; font-size: 13px;
 }
