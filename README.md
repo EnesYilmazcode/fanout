@@ -22,16 +22,17 @@ There are two ways to get an answer, and you pick per request by the model name:
    on their own machine, and their answer comes back to you. No provider key needed on your side.
 
 <p align="center">
-  <img src="docs/how-it-works.svg" alt="Your app sends one fo_live_ key to Relaybee, which routes to your provider keys or to a supporter" width="900">
+  <img src="docs/how-it-works.svg" alt="Your app sends one rb_live_ key to Relaybee, which routes to your provider keys or to a supporter" width="900">
 </p>
 
 ## Get started in 30 seconds
 
-Open the site. A key is minted for you the moment the page loads. Copy it, add a provider key if
-you want to use your own, and paste the config into your app.
+Open the site. A key is minted for you the moment the page loads, with no signup and nothing to
+confirm. Copy it and paste it where your OpenAI key would go.
 
-The [docs page](https://relaybee.vercel.app/docs.html) fills every example in with your own key
-and will run the first call for you, so you can check the key works before writing any code.
+The [docs page](https://relaybee.vercel.app/docs.html) fills every example in with that key and
+will run the first call for you, so you can check it works before writing any code. Adding your own
+provider key is one more call, `POST /api/connect`, and the docs page has it ready to copy.
 
 From code it is three lines of setup. Any OpenAI client works:
 
@@ -77,8 +78,11 @@ Under the hood it just does this, over and over until you stop it:
 
 The site shows how many supporters are online, and turns green when your own node is connected.
 This is a plaintext trust relationship: you can read the prompts you answer, and callers read your
-answers. The site says so where you turn it on. (If your tool cannot fetch a URL, the supporter
-view also has the full steps to paste by hand.)
+answers. Two things worth reading before you run one, both in
+[`/llms.txt`](https://relaybee.vercel.app/llms.txt): the prompt is a stranger's text going straight
+to your agent, so run it somewhere it cannot reach anything private, and a consumer subscription is
+licensed to its holder, so answering other people with it may fall outside your plan. (If your tool
+cannot fetch a URL, the supporter view also has the full steps to paste by hand.)
 
 ## How it works
 
@@ -122,11 +126,13 @@ For a fuller tour of the design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 ## Honest limits
 
 - A supporter can read the prompts they answer, and you can read their answer. The relay is a
-  trust relationship, and the site says so where you turn it on.
+  trust relationship, and `/llms.txt` says so, which is the file a supporter's agent reads and
+  follows before it runs anything.
 - The relay uses an in-memory queue unless Upstash is set, so on the free tier a caller and a
   supporter only meet if they land on the same server. Set `UPSTASH_REDIS_REST_URL` and
   `UPSTASH_REDIS_REST_TOKEN` to make it work everywhere.
-- A lost key cannot be shown again. The site has a backup button for this reason.
+- A lost key cannot be shown again, and nothing on the server can look it up. Copy it when you mint
+  it. The browser remembers it, so a cleared site storage is a lost key.
 - This is a demo. The free hosting tier is not for commercial use.
 
 ## Local development
