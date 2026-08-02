@@ -12,7 +12,7 @@ https://relaybee.vercel.app. Use whatever origin you loaded this from.
 
     POST <base>/api/keys/issue
 
-Returns JSON like `{ "key": "fo_live_..." }`. Save the key. Send it as
+Returns JSON like `{ "key": "rb_live_..." }`. Save the key. Send it as
 `Authorization: Bearer <key>` on every call below. No signup, nothing to paste.
 
 ## Step 2: loop until told to stop
