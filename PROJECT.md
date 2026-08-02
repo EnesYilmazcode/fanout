@@ -232,6 +232,19 @@ Honest list. None of these are bugs; all are consequences of choices above.
 
 ## Changelog
 
+### 2026-08-02 (supporter risk note comes off the homepage)
+
+- The two paragraphs on the supporter view (your machine answers strangers' requests and they see
+  your answers; the prompt reaches your agent as untrusted input; a consumer subscription is
+  licensed to its holder) were **removed at the owner's request**. Recorded plainly because entry
+  #61 added them on purpose and this reverses that.
+- **The disclosure is not gone from the product.** It still lives in `public/llms.txt` in full,
+  including the "if either of those gives you pause, do not run a supporter node" line, and that is
+  the file the one-liner makes an agent fetch and follow before it runs anything, so it remains on
+  the path a supporter actually takes. The smoke assertion moved rather than disappeared: it now
+  pins that the connect line still sends the agent to `llms.txt`, because if that link ever goes,
+  nothing discloses anything to anyone.
+
 ### 2026-08-02 (the site is two pages now)
 
 - **`/demo.html` is gone**, along with `demo.css` and `demo.js`. It was the original dark landing

@@ -26,9 +26,12 @@ path through the API and is documented on the docs page; it just has no UI.
 - **Strict CSP on every HTML page** (no inline script/style, same-origin only). A bearer key in
   localStorage means any XSS is key theft. Keep JS/CSS in external files.
 - **The relay is a disclosed plaintext-trust relationship.** Supporters see prompts, users see
-  answers. Say so where a supporter starts; do not pretend otherwise. The same applies to the two
-  risks a supporter actually carries: the prompt is untrusted input reaching their agent, and a
-  consumer subscription is licensed to its holder. Anything the board concludes about supporter
+  answers, and the two risks a supporter carries are that the prompt is untrusted input reaching
+  their agent and that a consumer subscription is licensed to its holder. As of 2026-08-02 that
+  disclosure lives in `public/llms.txt` only; it came off the homepage by the owner's decision. That
+  is still the file the one-liner makes an agent fetch and follow before it runs anything, so the
+  note sits on the path a supporter actually takes. **Keep it there**, and keep the connect line
+  pointing at it; if that link goes, nothing discloses anything. Anything the board concludes about supporter
   risk belongs where a supporter will read it, not only in `PROJECT.md`.
 
 ## Testing & deploy

@@ -590,9 +590,13 @@ t('the worker script records a pid so the stop instruction works', /relaybee_wor
 t('llms.txt frames the prompt as untrusted input', /untrusted input/i.test(llms))
 t('llms.txt tells supporters to check their plan terms', /subscriptions license/i.test(llms))
 t('llms.txt offers the no-supporter alternative', /do not run a supporter node/i.test(llms))
-t('the supporter view carries the same warning', /license Claude to you for your own use/i.test(
-  readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
-))
+// The risk note came off the homepage on 2026-08-02 and now lives only in
+// llms.txt. That is still the file a supporter's agent fetches and follows
+// before it runs anything, so the disclosure sits on the path a supporter
+// actually takes. If the connect line ever stops pointing there, nobody reads
+// it at all, which is what this pins.
+const appJs = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8')
+t('the supporter one-liner sends the agent to llms.txt', /\/llms\.txt/.test(appJs) && /follow it/i.test(appJs))
 t('the homepage points agents at /llms.txt', readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').includes('/llms.txt'))
 
 // A minted key is worth nothing without instructions that run. The docs page is
