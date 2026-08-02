@@ -30,6 +30,9 @@ There are two ways to get an answer, and you pick per request by the model name:
 Open the site. A key is minted for you the moment the page loads. Copy it, add a provider key if
 you want to use your own, and paste the config into your app.
 
+The [docs page](https://fanout-tawny.vercel.app/docs.html) fills every example in with your own key
+and will run the first call for you, so you can check the key works before writing any code.
+
 From code it is three lines of setup. Any OpenAI client works:
 
 ```js

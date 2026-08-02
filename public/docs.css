@@ -1,0 +1,132 @@
+/* Documentation page. Left-aligned prose column, same palette as the home page.
+   In a file because the CSP forbids inline styles. */
+:root {
+  --ink: #18181b; --dim: #71717a; --line: #e4e4e7; --bg: #ffffff; --well: #fafafa;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 4px; }
+
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+nav {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 24px; border-bottom: 1px solid var(--line);
+  font-size: 13.5px; color: var(--dim);
+}
+nav a { color: var(--dim); text-decoration: none; }
+nav a:hover { color: var(--ink); text-decoration: underline; }
+nav .brand { color: var(--ink); font-weight: 650; }
+nav .here { color: var(--ink); }
+nav .right { margin-left: auto; }
+
+main { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 14px; }
+h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; margin: 44px 0 10px; }
+h2.tight { margin-top: 0; font-size: 15px; }
+h3 { font-size: 14px; font-weight: 600; color: var(--dim); margin: 26px 0 8px; }
+p { margin: 0 0 12px; }
+.lead { font-size: 16px; color: var(--dim); margin-bottom: 28px; }
+.hint { font-size: 13px; color: var(--dim); }
+a { color: var(--ink); }
+
+code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--well);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+
+ul { margin: 0 0 12px; padding-left: 20px; }
+li { margin-bottom: 6px; }
+
+/* --- boxed panels (key, live tester) --- */
+.panel {
+  border: 1px solid var(--line); border-radius: 11px; background: var(--well);
+  padding: 18px 20px; margin: 0 0 8px;
+}
+.keyrow { display: flex; align-items: stretch; gap: 8px; }
+.keyrow code {
+  flex: 1; min-width: 0; display: flex; align-items: center;
+  background: var(--bg); border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; overflow-x: auto; white-space: nowrap;
+}
+button.icon {
+  flex: 0 0 auto; padding: 0 14px; cursor: pointer; border-radius: 8px;
+  background: var(--bg); color: var(--dim); border: 1px solid var(--line);
+  font-size: 12.5px; font-family: var(--mono);
+}
+button.icon:hover { color: var(--ink); border-color: var(--dim); }
+button.icon.done { color: #15803d; border-color: #15803d; }
+
+button.solid {
+  padding: 8px 18px; font-size: 13.5px; font-weight: 550; cursor: pointer;
+  background: var(--ink); color: #fff; border: 1px solid var(--ink); border-radius: 7px;
+}
+button.solid:hover { opacity: 0.85; }
+button.solid:disabled { opacity: 0.45; cursor: default; }
+
+label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit; font-size: 13.5px; resize: vertical;
+}
+.tryrow { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+#try-out {
+  margin: 14px 0 0; padding: 14px 16px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto;
+}
+#try-out.bad { color: #b91c1c; }
+
+/* --- copyable snippets --- */
+.snippet { position: relative; margin: 0 0 14px; }
+.snippet pre {
+  margin: 0; padding: 16px 18px; overflow-x: auto;
+  background: var(--well); border: 1px solid var(--line); border-radius: 9px;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+}
+.snippet .copy {
+  position: absolute; top: 8px; right: 8px; padding: 4px 10px; cursor: pointer;
+  background: var(--bg); color: var(--dim); border: 1px solid var(--line);
+  border-radius: 6px; font-family: var(--mono); font-size: 11.5px;
+}
+.snippet .copy:hover { color: var(--ink); border-color: var(--dim); }
+.snippet .copy.done { color: #15803d; border-color: #15803d; }
+
+.aside { margin: 0 0 20px; }
+.aside > summary { cursor: pointer; font-size: 13px; color: var(--dim); }
+.aside > summary:hover { color: var(--ink); }
+.aside[open] > summary { margin-bottom: 10px; }
+
+/* --- tables --- */
+table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; font-size: 12.5px; color: var(--dim); }
+td code { font-size: 12px; }
+
+/* --- supporter presence --- */
+.status {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
+  font-size: 13.5px; color: var(--dim);
+}
+.dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--line);
+  border: 1px solid #d4d4d8; flex: 0 0 auto;
+}
+.status.live { color: #15803d; }
+.status.live .dot { background: #22c55e; border-color: #16a34a; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .status.live .dot { animation: none; } }
+
+footer {
+  margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line);
+  display: flex; gap: 18px; font-size: 13px;
+}
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--ink); text-decoration: underline; }

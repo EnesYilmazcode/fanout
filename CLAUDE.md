@@ -8,7 +8,9 @@ Fanout is one OpenAI-shaped endpoint with two ways to get an answer:
 
 The homepage (`public/index.html` + `app.css` + `app.js`) auto-mints a key on load, offers a
 copy/regenerate box, a supporter toggle with a live "N supporters online" count, and a worker
-brief to paste into Claude Code / Codex. The bring-your-own-keys UI lives at `public/demo.html`.
+brief to paste into Claude Code / Codex. The bring-your-own-keys UI lives at `public/demo.html`,
+and `public/docs.html` is the caller-facing API reference: it reads the key out of localStorage and
+substitutes it into every example, and runs a live streaming relay call from the page.
 
 ## Architecture invariants — do not quietly break these
 

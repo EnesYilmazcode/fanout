@@ -78,6 +78,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 60 | Supporter worker loop handles error statuses, backs off, always answers | `fix(supporter)` (#70) |
 | 61 | Supporter-side risks (untrusted prompts, plan terms) shown where supporters start | `docs` (#72) |
 | 62 | Poll window aligned to the BRPOP cap, heartbeat throttled, cost model corrected | `perf(relay)` (#74) |
+| 63 | Hosted API docs at `/docs.html` — every example filled with the reader's own key, plus a live relay test on the page | `docs(web)` |
 
 ### Resolved: Fanout is a personal capacity router
 
@@ -228,6 +229,25 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-01 (a docs page that runs)
+
+- **"docs" in the footer pointed at the GitHub README, and the README does not know your key.** The
+  homepage hands you a key and a live count of supporters who could answer it, and then the next
+  step was on a different site, written in placeholders. That is the gap that got reported: the page
+  can tell you a supporter is online but not what to do with the key you are holding. `/docs.html`
+  reads the key this browser already has and substitutes it into every example, so the first curl on
+  the page is one you can paste and run.
+- **It also makes the call itself.** A prompt box on the page sends the real streaming request with
+  the real key, so "does my key work" is answered on the page instead of after a round trip through
+  a terminal. It reports the same error envelope the API returns, verbatim.
+- Covers both paths (`claude-code` relay and bring-your-own-keys), why `stream: true` is a
+  requirement rather than a preference on the relay, model naming, and the failure statuses a caller
+  actually hits with what to do about each. Also a PowerShell variant of the first curl, since the
+  single-quoted JSON body in the standard one does not survive PowerShell.
+- Verified in a real browser against the live handlers, not only asserted: mint from the page, key
+  substituted into every snippet, presence count, a full streaming relay answer delivered by a
+  supporter node, and zero CSP violations. 12 new smoke assertions pin the parts a reader copies.
 
 ### 2026-08-01 (board accuracy, and a repair)
 

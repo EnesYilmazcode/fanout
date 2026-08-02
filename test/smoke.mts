@@ -562,7 +562,7 @@ t('the worker script records a pid so the stop instruction works', /fanout_worke
 // Pin all three pages, and pin the absence of inline script/style that made it
 // impossible before (#77).
 {
-  const pages = ['index.html', 'demo.html', '404.html']
+  const pages = ['index.html', 'demo.html', '404.html', 'docs.html']
   for (const page of pages) {
     const src = readFileSync(new URL(`../public/${page}`, import.meta.url), 'utf8')
     t(`${page} carries the strict CSP`, /http-equiv="Content-Security-Policy"/.test(src) && /default-src 'none'/.test(src))
@@ -577,6 +577,26 @@ t('the supporter view carries the same warning', /license Claude to you for your
   readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
 ))
 t('the homepage points agents at /llms.txt', readFileSync(new URL('../public/index.html', import.meta.url), 'utf8').includes('/llms.txt'))
+
+// A minted key is worth nothing without instructions that run. The docs page is
+// the answer to "I have a key, now what", so pin the parts a reader actually
+// copies: the endpoint, the header, the relay's streaming requirement, and the
+// substitution that puts their own key into every example.
+console.log('\nAPI docs page — what to do with the key once you have one')
+const docsHtml = readFileSync(new URL('../public/docs.html', import.meta.url), 'utf8')
+const docsJs = readFileSync(new URL('../public/docs.js', import.meta.url), 'utf8')
+t('docs.html exists and is non-trivial', docsHtml.length > 2000, `len=${docsHtml.length}`)
+t('docs shows the completions endpoint and the bearer header', docsHtml.includes('/api/v1/chat/completions') && /Authorization: Bearer/.test(docsHtml))
+t('docs covers the relay model', docsHtml.includes('claude-code'))
+t('docs tells relay callers to stream', /"stream":true/.test(docsHtml) && /110 seconds/.test(docsHtml))
+t('docs covers the bring-your-own-keys path', docsHtml.includes('/api/connect') && docsHtml.includes('X-Fanout-Connection'))
+t('docs explains the failure statuses a caller will hit', /401/.test(docsHtml) && /429/.test(docsHtml) && /504/.test(docsHtml))
+t('examples carry tokens for the page to fill in', docsHtml.includes('__KEY__') && docsHtml.includes('__ORIGIN__'))
+t('docs.js substitutes both tokens', docsJs.includes('__KEY__') && docsJs.includes('__ORIGIN__'))
+t('docs.js reads the key the homepage already stored', docsJs.includes("localStorage.getItem('fanout_key')"))
+t('the in-page tester streams, as the page tells readers to', /stream:\s*true/.test(docsJs))
+t('the homepage links to the docs page, not the repo readme', indexHtml.includes('/docs.html') && !indexHtml.includes('fanout#readme'))
+t('docs page pulls in no third-party asset', !/https?:\/\/(?!github\.com)/.test(docsHtml))
 
 console.log(failed === 0 ? '\nall checks passed\n' : `\n${failed} check(s) failed\n`)
 process.exit(failed === 0 ? 0 : 1)
