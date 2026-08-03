@@ -244,18 +244,34 @@ Honest list. None of these are bugs; all are consequences of choices above.
   even pointed at the right host it printed "1 check(s) FAILED" and exited 1 on a fully
   successful run.
 - **The third one is the worst, because it fails in the direction that looks like a real
-  finding.** The script's closing line tells the reader a failure means the provider contract
-  does not match what `lib/providers.ts` assumes. That is exactly the wrong conclusion, and it
-  is what this file has been handing anyone who ran it.
-- Verified against production rather than locally: a wrong `--base` now exits 2 with a sentence
-  instead of a trace, the default resolves and reports commit `4a88331`, the key assertion
-  passes, and with a deliberately bogus provider key the chain reaches Anthropic and comes back
-  with a real `request_id` and `invalid x-api-key`. So everything up to the funded-key step is
-  now proven by running it. The prefix assertion is commented with where it mirrors
-  (`lib/auth.ts`) since it is the thing that silently rotted, and only the prefix is echoed,
-  never the key, which is a live bearer token for 90 days.
-- Not fixed, and worth knowing: the P1 itself is still open. This makes the command runnable; it
-  does not run it against a funded key.
+  finding.** The script's closing line told the reader a failure means the provider contract
+  does not match what `lib/providers.ts` assumes. So the message now branches: an upstream 401
+  or 403 says the provider rejected the key and nothing was tested, and only a failure that is
+  not an auth rejection still points at the adapter. Fixing the `fo_live_` assertion alone would
+  have removed one route to that wrong conclusion and left the conclusion itself, which is the
+  likelier one, since a wrong or unfunded provider key is the normal way this script fails.
+- **Two more rotted checks found while verifying the fix, both the same shape as the one being
+  fixed.** The pool-health assertion matched the bare label `verify`, and the label prefixes
+  every outcome the pool reports (`label:ok`, `label:429`, `label:unreachable`), so it passed on
+  a completely failed upstream call. It now matches `verify:ok`. And the script printed
+  `health.configured` without reading it, so a deployment missing its server secrets failed four
+  assertions later as an undefined key and a 401, never mentioning the actual cause. It now
+  stops there and says so.
+- **Guarding the health read needed both halves, which the first attempt got wrong.** A `.catch`
+  on `.json()` covers a host that resolves and answers with a Vercel 404 in plain text. It does
+  not cover a host that does not resolve, or a `--base` with no scheme, because there `fetch`
+  itself rejects and the await sits outside the catch. That was the likelier typo and it still
+  produced a stack trace. Checked all four now: unresolvable host, host with no deployment, a
+  string that is not a URL, and something answering JSON that is not Relaybee.
+- Verified against production rather than locally: the default base resolves and reports commit
+  `4a88331`, the key assertion passes, and with a deliberately bogus provider key the chain
+  reaches Anthropic and comes back with a real `request_id` and `invalid x-api-key`, and the
+  script now says the key was rejected rather than blaming the adapter. Everything up to the
+  funded-key step is proven by running it. The prefix assertion carries a comment naming where
+  it mirrors (`lib/auth.ts`), since that coupling is what rotted silently, and only the 8-character
+  prefix is echoed, never the key, which is a live bearer token for 90 days.
+- Not fixed, and worth knowing: the P1 itself is still open. This makes the command runnable and
+  makes it tell the truth when it fails; it does not run it against a funded key.
 
 ### 2026-08-02 (supporter risk note comes off the homepage)
 
