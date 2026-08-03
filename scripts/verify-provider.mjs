@@ -58,11 +58,13 @@ const post = (path, body, headers = {}) =>
 
 console.log(`\nverifying ${PROVIDER}/${MODEL} through ${BASE}`)
 
-// A --base that does not resolve to a deployment answers with a Vercel 404 in
-// plain text, so parsing it blind turns a typo into a stack trace out of undici.
-const health = await (await fetch(BASE + '/api/health')).json().catch(() => null)
+// Both halves have to be guarded, and for different typos. A host that resolves
+// but has no deployment answers with a Vercel 404 in plain text, so .json()
+// rejects; a host that does not resolve at all makes fetch itself reject. Either
+// one used to come out as a stack trace.
+const health = await fetch(BASE + '/api/health').then((r) => r.json()).catch(() => null)
 if (!health) {
-  console.error(`\n${BASE}/api/health did not return JSON. Check --base points at a live deployment.`)
+  console.error(`\n${BASE}/api/health did not answer with JSON. Check --base points at a live deployment.`)
   process.exit(2)
 }
 console.log(`   deployment commit ${health.commit}, queue ${health.queue}`)
