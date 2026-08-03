@@ -82,6 +82,38 @@ t('a polling node reads back as live', (await queue.isLive('node-a')) === true)
 t('an unknown node reads back as offline', (await queue.isLive('node-b')) === false)
 t('the global count sees it', (await queue.countLive()) >= 1)
 
+console.log('\nupstash — counting supporters is one read, not a write plus a read')
+// Plant a node whose last beat is older than the TTL.
+const liveBefore = await queue.countLive()
+await fake.raw(['ZADD', 'relaybee:nodes', Date.now() - (46 * 1000), 'stale-node'])
+fake.reset()
+const counted = await queue.countLive()
+t('counting costs one command', fake.total() === 1, `${fake.total()} commands: ${[...fake.counts].map(([k, v]) => k + '=' + v).join(' ')}`)
+t('and it is a range read, not a prune', (fake.counts.get('ZREMRANGEBYSCORE') ?? 0) === 0)
+t('a node past its TTL is not counted', counted === liveBefore, `${counted} vs ${liveBefore}`)
+const stored = await fake.raw(['ZCARD', 'relaybee:nodes'])
+t('the expired member is still in the set, so the count did not rely on deleting it',
+  stored === liveBefore + 1, String(stored))
+
+console.log('\nupstash — the sweep rides the beat that grows the set, not a counter')
+// A counter would live in one warm instance, so a poll landing on a cold one
+// would restart it and the degenerate case would never sweep. Keying off ZADD's
+// return value is server-side state, so it survives a cold start. Only the
+// second assertion discriminates: a counter also skips the sweep on most beats,
+// so it would still pass the first one.
+fake.reset()
+await queue.markLive('node-a')
+t('a repeat beat from a known node costs one command and no sweep',
+  fake.total() === 1 && (fake.counts.get('ZREMRANGEBYSCORE') ?? 0) === 0,
+  `${fake.total()} commands: ${[...fake.counts].map(([k, v]) => k + '=' + v).join(' ')}`)
+
+fake.reset()
+await queue.markLive('brand-new-node')
+t('the beat that adds a member sweeps', (fake.counts.get('ZREMRANGEBYSCORE') ?? 0) === 1, String(fake.counts.get('ZREMRANGEBYSCORE')))
+t('and it removed the node that was past its TTL', (await fake.raw(['ZSCORE', 'relaybee:nodes', 'stale-node'])) === null)
+t('so the set holds the live nodes and nothing else',
+  (await fake.raw(['ZCARD', 'relaybee:nodes'])) === liveBefore + 1, String(await fake.raw(['ZCARD', 'relaybee:nodes'])))
+
 console.log('\nupstash — the presence heartbeat is throttled, not per poll')
 const workNext = (await import('../api/work/next.ts')).default
 const pollReq = (k: string) => new Request('https://x/api/work/next', {
@@ -118,9 +150,9 @@ fake.reset()
 const h1 = await health(new Request('https://x/api/health'))
 const h1Body = await h1.json()
 t('health reports a live supporter count', typeof h1Body.supporters_online === 'number', String(h1Body.supporters_online))
-t('a cold health read costs one prune plus one count', fake.total() === 2, `${fake.total()}`)
+t('a cold health read costs a single count', fake.total() === 1, `${fake.total()}`)
 for (let i = 0; i < 5; i++) await health(new Request('https://x/api/health'))
-t('five more hits inside the cache window cost nothing', fake.total() === 2, `${fake.total()}`)
+t('five more hits inside the cache window cost nothing', fake.total() === 1, `${fake.total()}`)
 
 // Let the cache lapse, then take the queue away underneath it.
 await new Promise((r) => setTimeout(r, 5100))

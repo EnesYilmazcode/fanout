@@ -106,14 +106,28 @@ export async function startFakeUpstash(): Promise<FakeUpstash> {
         return 1
       }
       case 'ZADD': {
-        zset(key).set(String(parts[3]), Number(parts[2]))
-        return 1
+        // Redis returns the number of members ADDED, not updated, so a repeat
+        // beat from a node already in the set is 0. lib/queue.ts sweeps on that
+        // distinction, so returning a flat 1 here would hide the difference.
+        const z = zset(key)
+        const member = String(parts[3])
+        const isNew = !z.has(member)
+        z.set(member, Number(parts[2]))
+        return isNew ? 1 : 0
       }
       case 'ZSCORE': {
         const s = zset(key).get(String(parts[2]))
         return s === undefined ? null : String(s)
       }
       case 'ZCARD': return zset(key).size
+      case 'ZCOUNT': {
+        const z = zset(key)
+        const min = parts[2] === '-inf' ? -Infinity : Number(parts[2])
+        const max = parts[3] === '+inf' ? Infinity : Number(parts[3])
+        let n = 0
+        for (const score of z.values()) if (score >= min && score <= max) n++
+        return n
+      }
       case 'ZREMRANGEBYSCORE': {
         const z = zset(key)
         const min = parts[2] === '-inf' ? -Infinity : Number(parts[2])

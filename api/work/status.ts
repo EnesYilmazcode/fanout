@@ -22,9 +22,14 @@ const CORS = {
 // that fell behind isn't locked out, but still bounded.
 const IP_STATUS_LIMIT = 60
 
+// `connected` is this key's own node, so unlike /api/health this answer must
+// never land in a shared cache where another caller could be served it.
+const CACHE_CONTROL = 'private, no-store'
+
 function json(status: number, obj: unknown, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(obj), {
-    status, headers: { 'content-type': 'application/json', ...CORS, ...extra },
+    status,
+    headers: { 'content-type': 'application/json', 'cache-control': CACHE_CONTROL, ...CORS, ...extra },
   })
 }
 

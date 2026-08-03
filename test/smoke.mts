@@ -329,9 +329,13 @@ t('polling marks the node connected', after.connected === true)
 
 // Presence is scoped to the key — a different user never sees this node.
 const otherKey = await issueKey('someone_else', 'free')
-const other = await (await workStatus(statusReq(otherKey))).json()
+const otherRes = await workStatus(statusReq(otherKey))
+const other = await otherRes.json()
 t('presence does not leak across keys', other.connected === false)
 t('status needs a key', (await workStatus(new Request('https://x/api/work/status'))).status === 401)
+
+const statusCache = otherRes.headers.get('cache-control') ?? ''
+t('status is never shared-cached', /private/.test(statusCache) && /no-store/.test(statusCache), statusCache)
 
 // Global count: presenceUser polled above, so at least one node is live and the
 // count is visible to any key, including one whose own node is offline.
@@ -391,6 +395,8 @@ t('health supporters_online matches countLive', healthBody.supporters_online ===
 // "dev" fallback — asserting a specific value catches a broken/renamed field,
 // where "length > 0" could never fail.
 t('health reports the deployed commit', healthBody.commit === 'dev', healthBody.commit)
+const healthCache = (await health()).headers.get('cache-control') ?? ''
+t('health is cacheable by a shared cache', /public/.test(healthCache) && /s-maxage=[1-9]/.test(healthCache), healthCache)
 const healthPreflight = await health(new Request('https://x/api/health', { method: 'OPTIONS' }))
 t('health OPTIONS preflight returns 204', healthPreflight.status === 204, `status=${healthPreflight.status}`)
 t('health preflight sets CORS methods', (healthPreflight.headers.get('access-control-allow-methods') ?? '').includes('GET'))

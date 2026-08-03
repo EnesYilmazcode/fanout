@@ -81,6 +81,7 @@ local tests. One open question needs a decision from the owner: see P0 in Next.
 | 63 | Hosted API docs at `/docs.html` — every example filled with the reader's own key, plus a live relay test on the page | `docs(web)` |
 | 64 | Renamed to Relaybee — bee mark, `relaybee.vercel.app`, `rb_live_` keys, old key and header still accepted | `refactor(brand)` |
 | 65 | `/demo.html` removed; homepage trimmed to key, status, and two footer links | `refactor(web)` |
+| 66 | Counting supporters is one Redis read instead of a write plus a read; `/api/health` is shared-cacheable | `perf(queue)` |
 
 ### Resolved: Relaybee is a personal capacity router
 
@@ -231,6 +232,67 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-02 (counting supporters stopped costing a write)
+
+- **`countPresent` was a prune followed by a count, so every read of the global number paid for
+  a write it did not need.** `ZCOUNT` answers straight from the score range, so a node past its
+  45s TTL is already excluded whether or not anything deleted it first. The count is one command
+  now. `/api/work/status` drops from 3 Upstash commands per poll to 2, which for a tab left open
+  at the 10s poll rate is roughly 777K commands a month down to roughly 518K, against a 500K
+  free tier. Worth stating plainly rather than rounding in our own favour: that is 1.55x the
+  budget down to 1.04x. An always-open tab still does not fit on its own, which is what the last
+  bullet is about.
+- **Deleting expired members is still necessary, it is just not the reader's job.** Nothing
+  gives a sorted-set member its own expiry, so with no sweep the set grows once for every
+  supporter that ever polled. The sweep moved to the heartbeat and fires on the beat that adds
+  a member the set did not already have, which `ZADD` reports by returning 1. That ties the
+  cleanup rate to the rate at which the set can actually get bigger, so a node beating steadily
+  costs exactly one command and never sweeps, and the set cannot outgrow the peak number of
+  supporters live in any 45s window. Measured at 300 one-shot users each expiring immediately:
+  the set never held more than one member.
+- **What this is worse at, since it would be easy to claim otherwise.** Cleanup is now paired
+  with growth, which means it does not happen when the population only shrinks. Fifty supporters
+  join and forty-nine leave, and the forty-nine stay stored until somebody new arrives. Under
+  prune-on-read the next `/api/health` hit would have cleared them. So this is tighter in
+  command cost and looser in cleanup latency, unboundedly so in wall-clock time. It is
+  harmless because `ZCOUNT` reads the score range and reports the right number either way, and
+  the set is still bounded. Worth being plain about: on a personal router with one supporter
+  key, `ZADD` returns 1 exactly once in the lifetime of the database, so the sweep fires once
+  and then never again.
+  **The first attempt at this was a counter, sweep every 20 beats, and it was wrong.** The
+  counter lives in one warm instance, so the degenerate case the heartbeat throttle already
+  documents, every poll landing on a different instance, restarts it before it ever reaches 20.
+  Measured with 60 beats each in its own process: zero sweeps and 60 permanent members. `ZADD`'s
+  return value is server state, so it survives a cold start. The sweep's error is swallowed
+  either way, because the count never depended on it landing and housekeeping must not be able
+  to turn a supporter's poll into a 503.
+- **`/api/health` now sends `public, s-maxage=10, stale-while-revalidate=30`.** Nothing it
+  returns is per-user, so a shared cache can serve it, and that is what decouples the cost of
+  the count from how many people are looking at it. The 5s in-process cache it already had is
+  per warm instance and multiplies across them; a CDN cache does not. The stale window is 30
+  and not 50 because the body can already be 5s old when it is stored, so 5 + 10 + 30 lands
+  exactly on presence's own 45s TTL. A longer one would let health report a supporter that the
+  rest of the system already considers offline.
+- **`/api/work/status` got the opposite header, `private, no-store`.** It reports whether the
+  caller's own node is connected, so an authenticated per-user answer must never land in a
+  shared cache. Nothing was actually at risk before, since Vercel's own default for a function
+  response is `public, max-age=0, must-revalidate` and that already blocks it. This states the
+  requirement in the file rather than inheriting it from the host.
+- **Do not try to confirm the health header with `curl -I`, it will look like it never
+  shipped.** Vercel's proxy consumes `s-maxage` and `stale-while-revalidate` and strips both
+  before the client sees them, so the wire response reads `public, max-age=0`. The check that
+  means anything is `x-vercel-cache: HIT` on a second request. The smoke assertion reads the
+  header off the handler's own Response, which is the only place it survives.
+- Both cost claims are asserted rather than argued. `test/fake-upstash.mts` learned `ZCOUNT`,
+  and the new checks pin the count at one command, prove a node past its TTL is excluded from it
+  while still physically present in the set, and pin the sweep to the beat that grows the set
+  rather than to a counter. `fake-upstash` also had `ZADD` returning a flat 1; real Redis
+  returns 0 for a member it already had, and the sweep now turns on that distinction, so the
+  fake was hiding it. Suite is now 186 smoke and 38 upstash assertions.
+- **Not fixed here:** `/api/work/status` is 2 commands, not 1. Getting it to 1 means moving the
+  global count off an authenticated per-user endpoint so it can be shared-cached the way health
+  now is, and that changes what the homepage fetches. Worth doing, and it is its own change.
 
 ### 2026-08-02 (the script for the oldest P1 could not run)
 

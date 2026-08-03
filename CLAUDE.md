@@ -36,8 +36,10 @@ path through the API and is documented on the docs page; it just has no UI.
 
 ## Testing & deploy
 
-- `npm run check` = `tsc --noEmit` + `test/smoke.mts` (currently 42 assertions). It must pass
-  before any commit. Add assertions when you add behavior.
+- `npm run check` = `tsc --noEmit` + `test/smoke.mts` + `test/upstash.mts` (the real Upstash
+  path against a fake REST server that counts Redis commands, so cost claims are asserted, not
+  argued). It must pass before any commit. Add assertions when you add behavior. Exact counts
+  live in the `PROJECT.md` changelog, where they are a snapshot rather than a claim about now.
 - Deploy is automatic: Vercel builds every push. **`main` → production** (`relaybee.vercel.app`);
   every PR gets a preview URL. So merging to `main` ships.
 - GitHub Actions (`.github/workflows/ci.yml`) runs `npm run check` on pushes and PRs.
