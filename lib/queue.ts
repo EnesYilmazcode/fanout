@@ -23,8 +23,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // flicker offline.
 const PRESENCE_TTL_S = 45
 
-// Presence members carry no server-side expiry, so something has to delete them.
-
 // Hard caps so an idle or attacked queue can't grow without bound. A job is
 // ~32KB max; 200 is a generous ceiling for a demo and self-heals as work drains.
 const MAX_QUEUE = 200
@@ -114,8 +112,11 @@ function upstashStore(url: string, token: string): Store {
     // A counter would not: it lives in one warm instance, and a poll landing on
     // a cold one restarts it, so the degenerate case never sweeps at all.
     markPresence: async (userId) => {
+      // Number(), not a strict compare: cmd returns unknown, so this has no
+      // type-level protection, and coercing means a stringified reply cannot
+      // silently disable the sweep forever.
       const added = await cmd(['ZADD', NODES_KEY, Date.now(), userId])
-      if (added !== 1) return
+      if (Number(added) !== 1) return
       // Swallowed on purpose: the count never depended on the sweep landing, so
       // a failed one must not turn a supporter's poll into a 503.
       await cmd(['ZREMRANGEBYSCORE', NODES_KEY, 0, Date.now() - PRESENCE_TTL_S * 1000]).catch(() => {})

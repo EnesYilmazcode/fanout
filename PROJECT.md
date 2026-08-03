@@ -247,9 +247,19 @@ Honest list. None of these are bugs; all are consequences of choices above.
   gives a sorted-set member its own expiry, so with no sweep the set grows once for every
   supporter that ever polled. The sweep moved to the heartbeat and fires on the beat that adds
   a member the set did not already have, which `ZADD` reports by returning 1. That ties the
-  cleanup rate to the rate at which the set can actually get bigger: a node beating steadily
-  costs exactly one command and never sweeps, and the set converges on the live nodes rather
-  than on everyone who has ever polled, which is tighter than the prune-on-read it replaces.
+  cleanup rate to the rate at which the set can actually get bigger, so a node beating steadily
+  costs exactly one command and never sweeps, and the set cannot outgrow the peak number of
+  supporters live in any 45s window. Measured at 300 one-shot users each expiring immediately:
+  the set never held more than one member.
+- **What this is worse at, since it would be easy to claim otherwise.** Cleanup is now paired
+  with growth, which means it does not happen when the population only shrinks. Fifty supporters
+  join and forty-nine leave, and the forty-nine stay stored until somebody new arrives. Under
+  prune-on-read the next `/api/health` hit would have cleared them. So this is tighter in
+  command cost and looser in cleanup latency, unboundedly so in wall-clock time. It is
+  harmless because `ZCOUNT` reads the score range and reports the right number either way, and
+  the set is still bounded. Worth being plain about: on a personal router with one supporter
+  key, `ZADD` returns 1 exactly once in the lifetime of the database, so the sweep fires once
+  and then never again.
   **The first attempt at this was a counter, sweep every 20 beats, and it was wrong.** The
   counter lives in one warm instance, so the degenerate case the heartbeat throttle already
   documents, every poll landing on a different instance, restarts it before it ever reaches 20.
@@ -283,6 +293,7 @@ Honest list. None of these are bugs; all are consequences of choices above.
 - **Not fixed here:** `/api/work/status` is 2 commands, not 1. Getting it to 1 means moving the
   global count off an authenticated per-user endpoint so it can be shared-cached the way health
   now is, and that changes what the homepage fetches. Worth doing, and it is its own change.
+
 ### 2026-08-02 (the script for the oldest P1 could not run)
 
 - **`scripts/verify-provider.mjs` has been broken since the rename, and it is the one command

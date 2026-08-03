@@ -98,8 +98,9 @@ t('the expired member is still in the set, so the count did not rely on deleting
 console.log('\nupstash — the sweep rides the beat that grows the set, not a counter')
 // A counter would live in one warm instance, so a poll landing on a cold one
 // would restart it and the degenerate case would never sweep. Keying off ZADD's
-// return value is server-side state, so it survives a cold start. These two
-// assertions are the ones that would go green again if it went back to a counter.
+// return value is server-side state, so it survives a cold start. Only the
+// second assertion discriminates: a counter also skips the sweep on most beats,
+// so it would still pass the first one.
 fake.reset()
 await queue.markLive('node-a')
 t('a repeat beat from a known node costs one command and no sweep',
