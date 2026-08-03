@@ -23,6 +23,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // flicker offline.
 const PRESENCE_TTL_S = 45
 
+// Presence members carry no server-side expiry, so something has to delete them.
+
 // Hard caps so an idle or attacked queue can't grow without bound. A job is
 // ~32KB max; 200 is a generous ceiling for a demo and self-heals as work drains.
 const MAX_QUEUE = 200
@@ -106,16 +108,27 @@ function upstashStore(url: string, token: string): Store {
         if (res && res[1]) return res[1]
       }
     },
-    // One command per poll: bump this node's last-seen in a sorted set. Pruning
-    // and counting happen lazily in countPresent, off the hot poll path.
-    markPresence: async (userId) => { await cmd(['ZADD', NODES_KEY, Date.now(), userId]) },
+    // One command per poll, and a sweep only on the poll that grows the set.
+    // ZADD returns 1 for a member the set did not already have, which is the
+    // only way it gets bigger, so this ties the cleanup rate to the mess rate.
+    // A counter would not: it lives in one warm instance, and a poll landing on
+    // a cold one restarts it, so the degenerate case never sweeps at all.
+    markPresence: async (userId) => {
+      const added = await cmd(['ZADD', NODES_KEY, Date.now(), userId])
+      if (added !== 1) return
+      // Swallowed on purpose: the count never depended on the sweep landing, so
+      // a failed one must not turn a supporter's poll into a 503.
+      await cmd(['ZREMRANGEBYSCORE', NODES_KEY, 0, Date.now() - PRESENCE_TTL_S * 1000]).catch(() => {})
+    },
     isPresent: async (userId) => {
       const score = (await cmd(['ZSCORE', NODES_KEY, userId])) as string | null
       return score !== null && Date.now() - Number(score) <= PRESENCE_TTL_S * 1000
     },
+    // ZCOUNT answers straight from the score range, so an expired node is
+    // already excluded whether or not anything deleted it.
     countPresent: async () => {
-      await cmd(['ZREMRANGEBYSCORE', NODES_KEY, 0, Date.now() - PRESENCE_TTL_S * 1000])
-      return ((await cmd(['ZCARD', NODES_KEY])) as number) ?? 0
+      const cutoff = Date.now() - PRESENCE_TTL_S * 1000
+      return ((await cmd(['ZCOUNT', NODES_KEY, cutoff, '+inf'])) as number) ?? 0
     },
   }
 }

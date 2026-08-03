@@ -111,11 +111,10 @@ Note: jobs are strangers' prompts in plaintext, and they receive your answers ve
 
 let statusTimer = null
 
-// Each poll is three Upstash commands (ZSCORE for this node, then a prune and a
-// count for the global number), and presence has a 45s server-side TTL. Polling
-// every 3s bought no accuracy the TTL can express and cost 60 commands a minute
-// per open tab, against a 500K/month budget. Ten seconds is still well inside
-// the TTL and costs a fifth of that.
+// Each poll is two Upstash commands (ZSCORE for this node, ZCOUNT for the global
+// number), and presence has a 45s server-side TTL. Polling every 3s bought no
+// accuracy the TTL can express and cost 60 commands a minute per open tab,
+// against a 500K/month budget. Ten seconds is still well inside the TTL.
 const STATUS_POLL_MS = 10_000
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
