@@ -23,7 +23,7 @@ const args = new Map()
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ''), process.argv[i + 1])
 
 const PROVIDER = args.get('provider') ?? 'anthropic'
-const BASE = (args.get('base') ?? 'https://relaybee-tawny.vercel.app').replace(/\/$/, '')
+const BASE = (args.get('base') ?? 'https://relaybee.vercel.app').replace(/\/$/, '')
 const DEFAULT_MODEL = {
   anthropic: 'claude-opus-5',
   openai: 'gpt-4o-mini',
@@ -58,13 +58,23 @@ const post = (path, body, headers = {}) =>
 
 console.log(`\nverifying ${PROVIDER}/${MODEL} through ${BASE}`)
 
-const health = await (await fetch(BASE + '/api/health')).json()
+// A --base that does not resolve to a deployment answers with a Vercel 404 in
+// plain text, so parsing it blind turns a typo into a stack trace out of undici.
+const health = await (await fetch(BASE + '/api/health')).json().catch(() => null)
+if (!health) {
+  console.error(`\n${BASE}/api/health did not return JSON. Check --base points at a live deployment.`)
+  process.exit(2)
+}
 console.log(`   deployment commit ${health.commit}, queue ${health.queue}`)
 t('the deployment is up', health.ok === true)
 t('the provider is one it knows about', health.providers.includes(PROVIDER), health.providers.join(', '))
 
 const mint = await (await post('/api/keys/issue', {})).json()
-t('minted a Relaybee key', typeof mint.key === 'string' && mint.key.startsWith('fo_live_'))
+// Mirrors PREFIX in lib/auth.ts. It has changed once already, at the 2026-08-01
+// rename, and this assertion is the thing that quietly broke: fo_live_ is only
+// accepted on verify now, never minted, so the script failed on a good run.
+// Only the prefix is echoed, never the key: it is a live bearer token for 90 days.
+t('minted a Relaybee key', typeof mint.key === 'string' && mint.key.startsWith('rb_live_'), String(mint.key).slice(0, 8))
 const auth = { authorization: `Bearer ${mint.key}` }
 
 const sealed = await (await post('/api/connect', { provider: PROVIDER, apiKey: KEY, label: 'verify' }, auth)).json()

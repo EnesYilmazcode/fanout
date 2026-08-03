@@ -6,7 +6,7 @@ stale relative to the code. Newest entries at the top of each log.
 **Status:** deployed, and the relay is now verified end to end on production rather than only in
 local tests. One open question needs a decision from the owner: see P0 in Next.
 **Live URL:** https://relaybee.vercel.app
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-02
 
 ---
 
@@ -231,6 +231,31 @@ Honest list. None of these are bugs; all are consequences of choices above.
 ---
 
 ## Changelog
+
+### 2026-08-02 (the script for the oldest P1 could not run)
+
+- **`scripts/verify-provider.mjs` has been broken since the rename, and it is the one command
+  this board points at for its oldest P1.** Three defects, in the order you hit them. It
+  defaulted `--base` to `https://relaybee-tawny.vercel.app`, a host that has never existed: the
+  old one was `fanout-tawny` and the new one is `relaybee`, and the rename produced a name that
+  is neither. The resulting Vercel 404 is plain text, and the health response was parsed
+  unguarded, so the failure surfaced as an undici stack trace rather than an error. And it
+  asserted the minted key starts with `fo_live_`, which stopped being minted on 2026-08-01, so
+  even pointed at the right host it printed "1 check(s) FAILED" and exited 1 on a fully
+  successful run.
+- **The third one is the worst, because it fails in the direction that looks like a real
+  finding.** The script's closing line tells the reader a failure means the provider contract
+  does not match what `lib/providers.ts` assumes. That is exactly the wrong conclusion, and it
+  is what this file has been handing anyone who ran it.
+- Verified against production rather than locally: a wrong `--base` now exits 2 with a sentence
+  instead of a trace, the default resolves and reports commit `4a88331`, the key assertion
+  passes, and with a deliberately bogus provider key the chain reaches Anthropic and comes back
+  with a real `request_id` and `invalid x-api-key`. So everything up to the funded-key step is
+  now proven by running it. The prefix assertion is commented with where it mirrors
+  (`lib/auth.ts`) since it is the thing that silently rotted, and only the prefix is echoed,
+  never the key, which is a live bearer token for 90 days.
+- Not fixed, and worth knowing: the P1 itself is still open. This makes the command runnable; it
+  does not run it against a funded key.
 
 ### 2026-08-02 (supporter risk note comes off the homepage)
 
